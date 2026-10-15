@@ -3,12 +3,13 @@
 void yyerror(char *mensaje);
 int yylex();
 %}
-%token ALLOCATE MAIN BEGIN END INPUT OUTPUT IF THEN ELSE AND OR
+%token ALLOCATE MAIN R_BEGIN END INPUT OUTPUT IF THEN ELSE AND OR DO WHILE FOR TO DO_KW
 %token ASIGNACION MAYOR_IGUAL MENOR_IGUAL COMPARACION_IGUAL DIFERENTE POTENCIA
 %token DOS_PUNTOS PUNTO_COMA MAS MENOS POR ENTRE PAR_IZQ PAR_DER MENOR MAYOR
 %token ID NUMERO INVALIDO
 %%
-inicio: declaracionVariables | expresion | condicionLogica
+inicio: declaracionVariables | expresion | condicionLogica | cicloDoWhile | cicloFor
+    
         ;
 
 declaracionVariables: listaDeNombres ALLOCATE PUNTO_COMA
@@ -36,7 +37,48 @@ potenciaNum: potenciaNum POTENCIA factorBasico | factorBasico
 
 factorBasico: NUMERO | ID | PAR_IZQ expresion PAR_DER
         ;
-        
+
+/* Ciclo Do-While */
+cicloDoWhile: DO sentenciaWhileDo WHILE PAR_IZQ condicionLogica PAR_DER
+            ;
+
+sentenciaWhileDo: asignacion PUNTO_COMA
+                | escritura PUNTO_COMA
+                | lectura PUNTO_COMA
+                ;
+
+/* Ciclo For */
+cicloFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO R_BEGIN listaSentencias END
+        ;
+
+limiteInferior: NUMERO
+              | ID
+              ;
+
+limiteSuperior: NUMERO
+              | ID
+              ;
+
+listaSentencias: listaSentencias sentenciaPuntoComa
+               | sentenciaPuntoComa
+               | /* vacío */
+               ;
+
+sentenciaPuntoComa: asignacion PUNTO_COMA
+                  | lectura PUNTO_COMA
+                  | escritura PUNTO_COMA
+                  | cicloDoWhile
+                  | cicloFor
+                  ;
+
+asignacion: ID ASIGNACION expresion
+          ;
+
+lectura: INPUT ID
+       ;
+
+escritura: OUTPUT ID
+         ;
 %%
 int main(){
     yyparse();

@@ -1,12 +1,13 @@
 %{
+     #include "proyectoFinal.tab.h"
     #include <stdio.h>    
 %}
 %%
 [ \t\n\r]+      {}
-"***"[^*]*"***" {return COMENTARIO;}
+"***"[^*]*"***" {/*Ignorar comentarios por el momento*/;}
 "ALLOCATE"      {return ALLOCATE;}
 "MAIN"          {return MAIN;}
-"BEGIN"         {return BEGIN;}
+"BEGIN"         {return R_BEGIN;}
 "END"           {return END;}
 "INPUT"         {return INPUT;}
 "OUTPUT"        {return OUTPUT;}
@@ -15,6 +16,11 @@
 "ELSE"          {return ELSE;}
 "AND"           {return AND;}
 "OR"            {return OR;}
+"DO"            {return DO;}
+"WHILE"         {return WHILE;}
+"FOR"           {return FOR;}
+"TO"            {return TO;}
+"DO_KW"          {return DO_KW;}
 
 ":="            {return ASIGNACION;}
 ">="            {return MAYOR_IGUAL;}
