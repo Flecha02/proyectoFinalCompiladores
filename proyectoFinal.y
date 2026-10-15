@@ -2,48 +2,104 @@
 #include <stdio.h>
 void yyerror(char *mensaje);
 int yylex();
+extern int yylineno;
 %}
-%token ALLOCATE MAIN BEGIN END INPUT OUTPUT IF THEN ELSE AND OR
+
+%token ALLOCATE MAIN TK_BEGIN END INPUT OUTPUT IF THEN ELSE AND OR
 %token ASIGNACION MAYOR_IGUAL MENOR_IGUAL COMPARACION_IGUAL DIFERENTE POTENCIA
 %token DOS_PUNTOS PUNTO_COMA MAS MENOS POR ENTRE PAR_IZQ PAR_DER MENOR MAYOR
 %token ID NUMERO INVALIDO
+
 %%
-inicio: declaracionVariables | expresion | condicionLogica
+
+/* [Javier] modificado: estructura principal del programa*/
+inicio: MAIN TK_BEGIN cuerpo END
         ;
 
-declaracionVariables: listaDeNombres ALLOCATE PUNTO_COMA
+/* [Javier] agregado: regla de cuerpo para procesar secuencias de sentencias separadas por punto y coma */
+cuerpo: sentencia PUNTO_COMA cuerpo
+      | sentencia PUNTO_COMA
+      | sentencia
+      ;
+
+/* [Javier] agregado: regla general de sentencias que agrupa declaraciones, asignaciones, E/S y expresiones */
+sentencia: declaracionVariables 
+         | asignacion 
+         | lectura 
+         | escritura 
+         | condicionLogica 
+         | expresion
+         ;
+
+/* [Javier] modificado: regla de declaración de variables con la palabra reservada ALLOCATE */
+declaracionVariables: listaDeNombres ALLOCATE
         ;
 
-listaDeNombres: listaDeNombres DOS_PUNTOS ID | ID
-        ;
+listaDeNombres: listaDeNombres DOS_PUNTOS ID 
+              | ID
+              ;
 
-condicionLogica: condicionLogica AND comparacionSimple | condicionLogica OR comparacionSimple | comparacionSimple
-        ;
+/* [Javier] agregado: regla para manejar las asignaciones de variables con el operador := */
+asignacion: ID ASIGNACION expresion
+          ;
 
-comparacionSimple: expresion MENOR expresion | expresion MAYOR expresion
-        | expresion MENOR_IGUAL expresion | expresion MAYOR_IGUAL expresion
-        | expresion COMPARACION_IGUAL expresion | expresion DIFERENTE expresion
-        ;
+/* [Javier] agregado: Regla para la lectura de datos desde la entrada estándar (INPUT) */
+lectura: INPUT ID
+       ;
 
-expresion: expresion MAS termino | expresion MENOS termino | termino
-        ;
+/* [Javier] agregado: regla para la escritura de datos hacia la salida estándar (OUTPUT) */
+escritura: OUTPUT ID
+         ;
 
-termino: termino POR potenciaNum | termino ENTRE potenciaNum | potenciaNum
-        ;
+/* --- estructura logica --- */
+condicionLogica: condicionLogica AND comparacionSimple 
+               | condicionLogica OR comparacionSimple 
+               | comparacionSimple
+               ;
 
-potenciaNum: potenciaNum POTENCIA factorBasico | factorBasico
-        ;
+comparacionSimple: expresion MENOR expresion 
+                 | expresion MAYOR expresion
+                 | expresion MENOR_IGUAL expresion 
+                 | expresion MAYOR_IGUAL expresion
+                 | expresion COMPARACION_IGUAL expresion 
+                 | expresion DIFERENTE expresion
+                 ;
 
-factorBasico: NUMERO | ID | PAR_IZQ expresion PAR_DER
-        ;
+/* --- estructura aritmetica --- */
+expresion: expresion MAS termino 
+         | expresion MENOS termino 
+         | termino
+         ;
+
+termino: termino POR potenciaNum 
+       | termino ENTRE potenciaNum 
+       | potenciaNum
+       ;
+
+/* --- potenciacion  --- */
+potenciaNum: potenciaNum POTENCIA factorBasico 
+           | factorBasico
+           ;
+
+factorBasico: NUMERO 
+            | ID 
+            | PAR_IZQ expresion PAR_DER
+            ;
         
 %%
-int main(){
-    yyparse();
+
+int main() {
+    printf("Compilando EasyLang...\n");
+    if (yyparse() == 0) {
+        printf("\n[CORRECTO] Sintaxis valida.\n");
+    } else {
+        printf("\n[ERROR] Sintaxis invalida.\n");
+    }
     return 0;
 }
-void yyerror(char *mensaje){
-        extern int yylineno;
-        extern char *yytext;
-    fprintf(stderr, "Error:  %s en la linea %i cerca de %s\n", mensaje, yylineno, yytext);
+
+void yyerror(char *mensaje) {
+    extern int yylineno;
+    extern char *yytext;
+    fprintf(stderr, "Error: %s en la linea %i cerca de %s\n", mensaje, yylineno, yytext);
 }
