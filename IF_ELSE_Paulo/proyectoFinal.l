@@ -3,7 +3,7 @@
 #include "proyectoFinal.tab.h"
 %}
 
-%option noyywrap yylineno
+%option noyywrap yylineno noinput nounput never-interactive
 
 %%
 
@@ -49,9 +49,9 @@
 "<"                         { return MENOR; }
 ">"                         { return MAYOR; }
 
-[a-zA-Z][a-zA-Z0-9_]*       { return ID; }
+[a-zA-Z_][a-zA-Z0-9_]*       { yylval.nodo = crearNodo(VALOR, yytext, NULL, NULL, NULL); return ID; }
 
-[0-9]+                      { return NUMERO; }
+[0-9]+                      { yylval.nodo = crearNodo(VALOR, yytext, NULL, NULL, NULL); return NUMERO; }
 
 .                           { return INVALIDO; }
 
