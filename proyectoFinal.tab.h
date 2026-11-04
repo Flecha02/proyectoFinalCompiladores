@@ -56,7 +56,7 @@ extern int yydebug;
     YYUNDEF = 257,                 /* "invalid token"  */
     ALLOCATE = 258,                /* ALLOCATE  */
     MAIN = 259,                    /* MAIN  */
-    R_BEGIN = 260,                 /* R_BEGIN  */
+    INICIO_BLOQUE = 260,           /* INICIO_BLOQUE  */
     END = 261,                     /* END  */
     INPUT = 262,                   /* INPUT  */
     OUTPUT = 263,                  /* OUTPUT  */
@@ -65,37 +65,45 @@ extern int yydebug;
     ELSE = 266,                    /* ELSE  */
     AND = 267,                     /* AND  */
     OR = 268,                      /* OR  */
-    DO = 269,                      /* DO  */
-    WHILE = 270,                   /* WHILE  */
-    FOR = 271,                     /* FOR  */
-    TO = 272,                      /* TO  */
-    DO_KW = 273,                   /* DO_KW  */
-    ASIGNACION = 274,              /* ASIGNACION  */
-    MAYOR_IGUAL = 275,             /* MAYOR_IGUAL  */
-    MENOR_IGUAL = 276,             /* MENOR_IGUAL  */
-    COMPARACION_IGUAL = 277,       /* COMPARACION_IGUAL  */
-    DIFERENTE = 278,               /* DIFERENTE  */
-    POTENCIA = 279,                /* POTENCIA  */
-    DOS_PUNTOS = 280,              /* DOS_PUNTOS  */
-    PUNTO_COMA = 281,              /* PUNTO_COMA  */
-    MAS = 282,                     /* MAS  */
-    MENOS = 283,                   /* MENOS  */
-    POR = 284,                     /* POR  */
-    ENTRE = 285,                   /* ENTRE  */
-    PAR_IZQ = 286,                 /* PAR_IZQ  */
-    PAR_DER = 287,                 /* PAR_DER  */
-    MENOR = 288,                   /* MENOR  */
-    MAYOR = 289,                   /* MAYOR  */
-    ID = 290,                      /* ID  */
-    NUMERO = 291,                  /* NUMERO  */
-    INVALIDO = 292                 /* INVALIDO  */
+    ASIGNACION = 269,              /* ASIGNACION  */
+    MAYOR_IGUAL = 270,             /* MAYOR_IGUAL  */
+    MENOR_IGUAL = 271,             /* MENOR_IGUAL  */
+    COMPARACION_IGUAL = 272,       /* COMPARACION_IGUAL  */
+    DIFERENTE = 273,               /* DIFERENTE  */
+    POTENCIA = 274,                /* POTENCIA  */
+    DOS_PUNTOS = 275,              /* DOS_PUNTOS  */
+    PUNTO_COMA = 276,              /* PUNTO_COMA  */
+    MAS = 277,                     /* MAS  */
+    MENOS = 278,                   /* MENOS  */
+    POR = 279,                     /* POR  */
+    ENTRE = 280,                   /* ENTRE  */
+    PAR_IZQ = 281,                 /* PAR_IZQ  */
+    PAR_DER = 282,                 /* PAR_DER  */
+    MENOR = 283,                   /* MENOR  */
+    MAYOR = 284,                   /* MAYOR  */
+    DO = 285,                      /* DO  */
+    WHILE = 286,                   /* WHILE  */
+    FOR = 287,                     /* FOR  */
+    TO = 288,                      /* TO  */
+    ID = 289,                      /* ID  */
+    NUMERO = 290,                  /* NUMERO  */
+    INVALIDO = 291                 /* INVALIDO  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-typedef int YYSTYPE;
+union YYSTYPE
+{
+#line 284 "proyectoFinal.y"
+
+    char cadena[50];
+
+#line 104 "proyectoFinal.tab.h"
+
+};
+typedef union YYSTYPE YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define YYSTYPE_IS_DECLARED 1
 #endif

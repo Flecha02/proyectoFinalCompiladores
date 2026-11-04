@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 
 export default function EasyLangIDE() {
-  const [code, setCode] = useState('MAIN\nBEGIN\n  a:b ALLOCATE;\n  INPUT b;\n  a := 1 + 2 + b;\n  OUTPUT a;\nEND');
+  const [code, setCode] = useState('');
   const [intermediateCode, setIntermediateCode] = useState('');
   const [assemblerCode, setAssemblerCode] = useState('');
   const [consoleOutput, setConsoleOutput] = useState('');
@@ -33,17 +33,50 @@ export default function EasyLangIDE() {
     }
   };
 
-  // 2. Funciones de Compilación y Ejecución
-  const handleGenerateIntermediate = () => {
-    setIntermediateCode('t1 = 1 + 2\nt2 = t1 + b\na = t2');
+  // 2. Función unificada para consumir la API del Backend (Node.js + Compilador en C)
+  const handleCompileBackend = async () => {
+    try {
+      setConsoleOutput('Enviando código al servidor de compilación...');
+      const respuesta = await fetch('http://localhost:5000/api/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: code })
+      });
+      const resultado = await respuesta.json();
+      
+      // Asignamos únicamente lo que retorna la API del backend
+      setIntermediateCode(resultado.tac || '// Sin código TAC generado');
+      setAssemblerCode(resultado.asm || '; Sin código NASM generado');
+      setConsoleOutput(resultado.mensaje || 'Proceso completado.');
+      
+      return resultado;
+    } catch (error) {
+      setConsoleOutput('Error de conexión con el backend en Node.js:\n' + error);
+      return null;
+    }
   };
 
-  const handleGenerateAssembler = () => {
-    setAssemblerCode('section .text\n    global main\nmain:\n    ; Código NASM generado por el compilador');
+  const handleGenerateIntermediate = async () => {
+    await handleCompileBackend();
   };
 
-  const handleExecute = () => {
-    setConsoleOutput('Compilando con NASM y ejecutando...\nSalida estándar:\n> 15');
+  const handleGenerateAssembler = async () => {
+    await handleCompileBackend();
+  };
+
+  const handleExecute = async () => {
+    const resultado = await handleCompileBackend();
+    if (resultado && resultado.exito) {
+      setConsoleOutput(
+        '=== COMPILACIÓN Y TRADUCCIÓN EXITOSA ===\n' +
+        '1. Archivo codigo.tac generado en el servidor.\n' +
+        '2. Archivo codigo.asm generado con éxito en el servidor.\n\n' +
+        'Puedes ensamblar y correr en tu Ubuntu con:\n' +
+        '  nasm -f elf32 codigo.asm -o codigo.o\n' +
+        '  gcc -m32 codigo.o -o programa\n' +
+        '  ./programa'
+      );
+    }
   };
 
   return (

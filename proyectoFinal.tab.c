@@ -70,10 +70,287 @@
 #line 1 "proyectoFinal.y"
 
 #include <stdio.h>
-void yyerror(char *mensaje);
-int yylex();
+#include <string.h>
 
-#line 77 "proyectoFinal.tab.c"
+/* Función nativa en C optimizada: declara solo las variables y temporales usados */
+void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
+    FILE *in = fopen(archivoTac, "r");
+    FILE *out = fopen(archivoNasm, "w");
+    if (!in || !out) {
+        fprintf(stderr, "Error al abrir archivos para la traducción NASM.\n");
+        return;
+    }
+
+    /* Arreglos para registrar qué variables y temporales se usan realmente */
+    int usados_t[200] = {0}; // Para t1, t2, ... t199
+    int usa_x = 0, usa_y = 0, usa_z = 0, usa_i = 0, usa_total = 0;
+    int usa_limite = 0, usa_contador = 0, usa_resultado = 0, usa_res = 0;
+
+    /* PASO 1: Escanear el TAC para ver qué variables y temporales existen */
+    char linea[256];
+    while (fgets(linea, sizeof(linea), in)) {
+        linea[strcspn(linea, "\r\n")] = 0;
+        if (strlen(linea) == 0) continue;
+
+        /* Detectar temporales tX */
+        for (int i = 1; i < 200; i++) {
+            char t_str[20];
+            sprintf(t_str, "t%d", i);
+            if (strstr(linea, t_str)) {
+                usados_t[i] = 1;
+            }
+        }
+        /* Detectar variables conocidas */
+        if (strstr(linea, " x")) usa_x = 1;
+        if (strstr(linea, " y")) usa_y = 1;
+        if (strstr(linea, " z")) usa_z = 1;
+        if (strstr(linea, " i")) usa_i = 1;
+        if (strstr(linea, "total")) usa_total = 1;
+        if (strstr(linea, "limite")) usa_limite = 1;
+        if (strstr(linea, "contador")) usa_contador = 1;
+        if (strstr(linea, "resultado")) usa_resultado = 1;
+        if (strstr(linea, "res")) usa_res = 1;
+    }
+    rewind(in); // Regresar al inicio del archivo TAC para la traducción real
+
+    /* Cabecera obligatoria de NASM */
+    fprintf(out, "bits 32\n\n");
+    fprintf(out, "global main\n");
+    fprintf(out, "extern printf\n");
+    fprintf(out, "extern scanf\n\n");
+    fprintf(out, "section .data\n");
+    fprintf(out, "    fmt_print db \"%%d\", 10, 0\n");
+    fprintf(out, "    fmt_scan  db \"%%d\", 0\n\n");
+    
+    fprintf(out, "section .bss\n");
+    /* Declarar SOLO las variables que detectó que se usaron */
+    if (usa_x)        fprintf(out, "    x resd 1\n");
+    if (usa_y)        fprintf(out, "    y resd 1\n");
+    if (usa_z)        fprintf(out, "    z resd 1\n");
+    if (usa_i)        fprintf(out, "    i resd 1\n");
+    if (usa_total)    fprintf(out, "    total resd 1\n");
+    if (usa_limite)   fprintf(out, "    limite resd 1\n");
+    if (usa_contador) fprintf(out, "    contador resd 1\n");
+    if (usa_resultado)fprintf(out, "    resultado resd 1\n");
+    if (usa_res)      fprintf(out, "    res resd 1\n");
+
+    /* Declarar SOLO los temporales que realmente aparecieron en el TAC */
+    for (int i = 1; i < 200; i++) {
+        if (usados_t[i]) {
+            fprintf(out, "    t%d resd 1\n", i);
+        }
+    }
+
+    fprintf(out, "\nsection .text\n");
+    fprintf(out, "main:\n");
+    fprintf(out, "    push ebp\n");
+    fprintf(out, "    mov ebp, esp\n\n");
+
+    /* PASO 2: Traducir línea por línea el TAC a NASM (manteniendo tu lógica actual) */
+    while (fgets(linea, sizeof(linea), in)) {
+        linea[strcspn(linea, "\r\n")] = 0;
+        if (strlen(linea) == 0) continue;
+
+        /* A. Etiquetas */
+        if (linea[strlen(linea) - 1] == ':') {
+            fprintf(out, "%s\n", linea);
+        }
+        /* B. Saltos incondicionales */
+        else if (strncmp(linea, "goto ", 5) == 0) {
+            fprintf(out, "    jmp %s\n", linea + 5);
+        }
+        /* C. Saltos condicionales */
+        else if (strncmp(linea, "ifZ ", 4) == 0) {
+            char cond[50], etiqueta[50];
+            if (sscanf(linea, "ifZ %s goto %s", cond, etiqueta) == 2) {
+                fprintf(out, "    mov eax, [%s]\n", cond);
+                fprintf(out, "    cmp eax, 0\n");
+                fprintf(out, "    je %s\n", etiqueta);
+            }
+        }
+        /* D. Entrada / Salida */
+        else if (strncmp(linea, "push ", 5) == 0) {
+            char var[50];
+            sscanf(linea, "push %s", var);
+            if ((var[0] >= 'a' && var[0] <= 'z') || (var[0] >= 'A' && var[0] <= 'Z') || var[0] == 't') {
+                fprintf(out, "    push dword [%s]\n", var);
+            } else {
+                fprintf(out, "    push %s\n", var);
+            }
+        }
+        else if (strncmp(linea, "call ", 5) == 0) {
+            fprintf(out, "    %s\n", linea);
+            fprintf(out, "    add esp, 4\n");
+        }
+        /* E. Asignaciones y operaciones */
+        else if (strchr(linea, '=')) {
+            char dest[50], expr[100];
+            char *eq = strchr(linea, '=');
+            *eq = '\0';
+            strcpy(dest, linea);
+            strcpy(expr, eq + 1);
+
+            if (strstr(expr, "<=") && !strstr(expr, "<")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^<]<=%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    cmp eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    cmp eax, [%s]\n", op2);
+                }
+                fprintf(out, "    jle ._%s_true\n", dest);
+                fprintf(out, "    mov dword [%s], 0\n", dest);
+                fprintf(out, "    jmp ._%s_fin\n", dest);
+                fprintf(out, "._%s_true:\n", dest);
+                fprintf(out, "    mov dword [%s], 1\n", dest);
+                fprintf(out, "._%s_fin:\n", dest);
+            } else if (strstr(expr, ">=") && !strstr(expr, ">")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^>]>=%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    cmp eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    cmp eax, [%s]\n", op2);
+                }
+                fprintf(out, "    jge ._%s_true\n", dest);
+                fprintf(out, "    mov dword [%s], 0\n", dest);
+                fprintf(out, "    jmp ._%s_fin\n", dest);
+                fprintf(out, "._%s_true:\n", dest);
+                fprintf(out, "    mov dword [%s], 1\n", dest);
+                fprintf(out, "._%s_fin:\n", dest);
+            } else if (strstr(expr, "<") && !strstr(expr, "<=")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^<]<%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    cmp eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    cmp eax, [%s]\n", op2);
+                }
+                fprintf(out, "    jl ._%s_true\n", dest);
+                fprintf(out, "    mov dword [%s], 0\n", dest);
+                fprintf(out, "    jmp ._%s_fin\n", dest);
+                fprintf(out, "._%s_true:\n", dest);
+                fprintf(out, "    mov dword [%s], 1\n", dest);
+                fprintf(out, "._%s_fin:\n", dest);
+            } else if (strstr(expr, ">") && !strstr(expr, ">=")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^>]>%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    cmp eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    cmp eax, [%s]\n", op2);
+                }
+                fprintf(out, "    jg ._%s_true\n", dest);
+                fprintf(out, "    mov dword [%s], 0\n", dest);
+                fprintf(out, "    jmp ._%s_fin\n", dest);
+                fprintf(out, "._%s_true:\n", dest);
+                fprintf(out, "    mov dword [%s], 1\n", dest);
+                fprintf(out, "._%s_fin:\n", dest);
+            } else if (strstr(expr, "+")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^+]+%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    add eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    add eax, [%s]\n", op2);
+                }
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "-")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^-]-%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    sub eax, %s\n", op2);
+                } else {
+                    fprintf(out, "    sub eax, [%s]\n", op2);
+                }
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "*") && !strstr(expr, "**")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^*]*%s", op1, op2);
+                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op2[0] >= '0' && op2[0] <= '9') {
+                    fprintf(out, "    imul eax, dword %s\n", op2);
+                } else {
+                    fprintf(out, "    imul eax, dword [%s]\n", op2);
+                }
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else {
+                if (expr[0] >= '0' && expr[0] <= '9') {
+                    fprintf(out, "    mov dword [%s], %s\n", dest, expr);
+                } else {
+                    fprintf(out, "    mov eax, [%s]\n", expr);
+                    fprintf(out, "    mov [%s], eax\n", dest);
+                }
+            }
+        }
+    }
+
+    /* Cierre estándar NASM */
+    fprintf(out, "\n    mov esp, ebp\n");
+    fprintf(out, "    pop ebp\n");
+    fprintf(out, "    xor eax, eax\n");
+    fprintf(out, "    ret\n");
+
+    /* Funciones auxiliares I/O embebidas */
+    fprintf(out, "\nglobal output\noutput:\n");
+    fprintf(out, "    push ebp\n    mov ebp, esp\n");
+    fprintf(out, "    push dword [ebp+8]\n    push fmt_print\n    call printf\n    add esp, 8\n");
+    fprintf(out, "    mov esp, ebp\n    pop ebp\n    ret\n");
+
+    fprintf(out, "\nglobal input\ninput:\n");
+    fprintf(out, "    push ebp\n    mov ebp, esp\n");
+    fprintf(out, "    push dword [ebp+8]\n    push fmt_scan\n    call scanf\n    add esp, 8\n");
+    fprintf(out, "    mov esp, ebp\n    pop ebp\n    ret\n");
+
+    fclose(in);
+    fclose(out);
+}
+
+void yyerror(const char *mensaje);
+int  yylex(void);
+extern int  yylineno;
+extern char *yytext;
+
+static int temp_count = 1;    /* contador de temporales: t1, t2, ...  */
+static int label_count = 1;   /* contador de etiquetas:  l1, l2, ...  */
+
+void nuevaTemp(char *temporal)
+{
+    sprintf(temporal, "t%d", temp_count++);
+}
+
+void nuevaEtiqueta(char *etiqueta)
+{
+    sprintf(etiqueta, "l%d", label_count++);
+}
+
+/* Pila LIFO de etiquetas: permite anidar estructuras de control
+   (IF, WHILE, DO-WHILE, FOR) sin mezclar sus etiquetas.        */
+#define MAX_ETIQUETAS 100
+static char pilaEtiquetas[MAX_ETIQUETAS][50];
+static int  topeEtiquetas = 0;
+
+void apilarEtiqueta(const char *etiqueta)
+{
+    if (topeEtiquetas < MAX_ETIQUETAS)
+        strcpy(pilaEtiquetas[topeEtiquetas++], etiqueta);
+}
+
+void desapilarEtiqueta(char *etiqueta)
+{
+    if (topeEtiquetas > 0)
+        strcpy(etiqueta, pilaEtiquetas[--topeEtiquetas]);
+    else
+        etiqueta[0] = '\0';
+}
+
+#line 354 "proyectoFinal.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -106,7 +383,7 @@ enum yysymbol_kind_t
   YYSYMBOL_YYUNDEF = 2,                    /* "invalid token"  */
   YYSYMBOL_ALLOCATE = 3,                   /* ALLOCATE  */
   YYSYMBOL_MAIN = 4,                       /* MAIN  */
-  YYSYMBOL_R_BEGIN = 5,                    /* R_BEGIN  */
+  YYSYMBOL_INICIO_BLOQUE = 5,              /* INICIO_BLOQUE  */
   YYSYMBOL_END = 6,                        /* END  */
   YYSYMBOL_INPUT = 7,                      /* INPUT  */
   YYSYMBOL_OUTPUT = 8,                     /* OUTPUT  */
@@ -115,50 +392,57 @@ enum yysymbol_kind_t
   YYSYMBOL_ELSE = 11,                      /* ELSE  */
   YYSYMBOL_AND = 12,                       /* AND  */
   YYSYMBOL_OR = 13,                        /* OR  */
-  YYSYMBOL_DO = 14,                        /* DO  */
-  YYSYMBOL_WHILE = 15,                     /* WHILE  */
-  YYSYMBOL_FOR = 16,                       /* FOR  */
-  YYSYMBOL_TO = 17,                        /* TO  */
-  YYSYMBOL_DO_KW = 18,                     /* DO_KW  */
-  YYSYMBOL_ASIGNACION = 19,                /* ASIGNACION  */
-  YYSYMBOL_MAYOR_IGUAL = 20,               /* MAYOR_IGUAL  */
-  YYSYMBOL_MENOR_IGUAL = 21,               /* MENOR_IGUAL  */
-  YYSYMBOL_COMPARACION_IGUAL = 22,         /* COMPARACION_IGUAL  */
-  YYSYMBOL_DIFERENTE = 23,                 /* DIFERENTE  */
-  YYSYMBOL_POTENCIA = 24,                  /* POTENCIA  */
-  YYSYMBOL_DOS_PUNTOS = 25,                /* DOS_PUNTOS  */
-  YYSYMBOL_PUNTO_COMA = 26,                /* PUNTO_COMA  */
-  YYSYMBOL_MAS = 27,                       /* MAS  */
-  YYSYMBOL_MENOS = 28,                     /* MENOS  */
-  YYSYMBOL_POR = 29,                       /* POR  */
-  YYSYMBOL_ENTRE = 30,                     /* ENTRE  */
-  YYSYMBOL_PAR_IZQ = 31,                   /* PAR_IZQ  */
-  YYSYMBOL_PAR_DER = 32,                   /* PAR_DER  */
-  YYSYMBOL_MENOR = 33,                     /* MENOR  */
-  YYSYMBOL_MAYOR = 34,                     /* MAYOR  */
-  YYSYMBOL_ID = 35,                        /* ID  */
-  YYSYMBOL_NUMERO = 36,                    /* NUMERO  */
-  YYSYMBOL_INVALIDO = 37,                  /* INVALIDO  */
-  YYSYMBOL_YYACCEPT = 38,                  /* $accept  */
-  YYSYMBOL_inicio = 39,                    /* inicio  */
-  YYSYMBOL_declaracionVariables = 40,      /* declaracionVariables  */
-  YYSYMBOL_listaDeNombres = 41,            /* listaDeNombres  */
-  YYSYMBOL_condicionLogica = 42,           /* condicionLogica  */
-  YYSYMBOL_comparacionSimple = 43,         /* comparacionSimple  */
-  YYSYMBOL_expresion = 44,                 /* expresion  */
-  YYSYMBOL_termino = 45,                   /* termino  */
-  YYSYMBOL_potenciaNum = 46,               /* potenciaNum  */
-  YYSYMBOL_factorBasico = 47,              /* factorBasico  */
-  YYSYMBOL_cicloDoWhile = 48,              /* cicloDoWhile  */
-  YYSYMBOL_sentenciaWhileDo = 49,          /* sentenciaWhileDo  */
-  YYSYMBOL_cicloFor = 50,                  /* cicloFor  */
-  YYSYMBOL_limiteInferior = 51,            /* limiteInferior  */
-  YYSYMBOL_limiteSuperior = 52,            /* limiteSuperior  */
-  YYSYMBOL_listaSentencias = 53,           /* listaSentencias  */
-  YYSYMBOL_sentenciaPuntoComa = 54,        /* sentenciaPuntoComa  */
-  YYSYMBOL_asignacion = 55,                /* asignacion  */
-  YYSYMBOL_lectura = 56,                   /* lectura  */
-  YYSYMBOL_escritura = 57                  /* escritura  */
+  YYSYMBOL_ASIGNACION = 14,                /* ASIGNACION  */
+  YYSYMBOL_MAYOR_IGUAL = 15,               /* MAYOR_IGUAL  */
+  YYSYMBOL_MENOR_IGUAL = 16,               /* MENOR_IGUAL  */
+  YYSYMBOL_COMPARACION_IGUAL = 17,         /* COMPARACION_IGUAL  */
+  YYSYMBOL_DIFERENTE = 18,                 /* DIFERENTE  */
+  YYSYMBOL_POTENCIA = 19,                  /* POTENCIA  */
+  YYSYMBOL_DOS_PUNTOS = 20,                /* DOS_PUNTOS  */
+  YYSYMBOL_PUNTO_COMA = 21,                /* PUNTO_COMA  */
+  YYSYMBOL_MAS = 22,                       /* MAS  */
+  YYSYMBOL_MENOS = 23,                     /* MENOS  */
+  YYSYMBOL_POR = 24,                       /* POR  */
+  YYSYMBOL_ENTRE = 25,                     /* ENTRE  */
+  YYSYMBOL_PAR_IZQ = 26,                   /* PAR_IZQ  */
+  YYSYMBOL_PAR_DER = 27,                   /* PAR_DER  */
+  YYSYMBOL_MENOR = 28,                     /* MENOR  */
+  YYSYMBOL_MAYOR = 29,                     /* MAYOR  */
+  YYSYMBOL_DO = 30,                        /* DO  */
+  YYSYMBOL_WHILE = 31,                     /* WHILE  */
+  YYSYMBOL_FOR = 32,                       /* FOR  */
+  YYSYMBOL_TO = 33,                        /* TO  */
+  YYSYMBOL_ID = 34,                        /* ID  */
+  YYSYMBOL_NUMERO = 35,                    /* NUMERO  */
+  YYSYMBOL_INVALIDO = 36,                  /* INVALIDO  */
+  YYSYMBOL_YYACCEPT = 37,                  /* $accept  */
+  YYSYMBOL_inicio = 38,                    /* inicio  */
+  YYSYMBOL_listaSentencias = 39,           /* listaSentencias  */
+  YYSYMBOL_sentencia = 40,                 /* sentencia  */
+  YYSYMBOL_declaracionVariables = 41,      /* declaracionVariables  */
+  YYSYMBOL_listaDeNombres = 42,            /* listaDeNombres  */
+  YYSYMBOL_asignacion = 43,                /* asignacion  */
+  YYSYMBOL_lectura = 44,                   /* lectura  */
+  YYSYMBOL_escritura = 45,                 /* escritura  */
+  YYSYMBOL_condicional = 46,               /* condicional  */
+  YYSYMBOL_47_1 = 47,                      /* $@1  */
+  YYSYMBOL_cabeceraIf = 48,                /* cabeceraIf  */
+  YYSYMBOL_bloque = 49,                    /* bloque  */
+  YYSYMBOL_cicloWhile = 50,                /* cicloWhile  */
+  YYSYMBOL_51_2 = 51,                      /* $@2  */
+  YYSYMBOL_52_3 = 52,                      /* $@3  */
+  YYSYMBOL_cicloDoWhile = 53,              /* cicloDoWhile  */
+  YYSYMBOL_54_4 = 54,                      /* $@4  */
+  YYSYMBOL_cicloFor = 55,                  /* cicloFor  */
+  YYSYMBOL_cabeceraFor = 56,               /* cabeceraFor  */
+  YYSYMBOL_limiteInferior = 57,            /* limiteInferior  */
+  YYSYMBOL_limiteSuperior = 58,            /* limiteSuperior  */
+  YYSYMBOL_condicionLogica = 59,           /* condicionLogica  */
+  YYSYMBOL_comparacionSimple = 60,         /* comparacionSimple  */
+  YYSYMBOL_expresion = 61,                 /* expresion  */
+  YYSYMBOL_termino = 62,                   /* termino  */
+  YYSYMBOL_potenciaNum = 63,               /* potenciaNum  */
+  YYSYMBOL_factorBasico = 64               /* factorBasico  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -484,21 +768,21 @@ union yyalloc
 #endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  27
+#define YYFINAL  4
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   93
+#define YYLAST   114
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  38
+#define YYNTOKENS  37
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  20
+#define YYNNTS  28
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  49
+#define YYNRULES  55
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  93
+#define YYNSTATES  112
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   292
+#define YYMAXUTOK   291
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -541,18 +825,19 @@ static const yytype_int8 yytranslate[] =
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
       15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
       25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
-      35,    36,    37
+      35,    36
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_int8 yyrline[] =
+static const yytype_int16 yyrline[] =
 {
-       0,    11,    11,    11,    11,    11,    11,    15,    18,    18,
-      21,    21,    21,    24,    24,    25,    25,    26,    26,    29,
-      29,    29,    32,    32,    32,    35,    35,    38,    38,    38,
-      42,    45,    46,    47,    51,    54,    55,    58,    59,    62,
-      63,    64,    67,    68,    69,    70,    71,    74,    77,    80
+       0,   306,   306,   313,   314,   318,   319,   320,   321,   322,
+     323,   324,   325,   331,   335,   336,   342,   349,   358,   368,
+     375,   374,   393,   400,   410,   420,   427,   419,   448,   447,
+     465,   478,   500,   501,   505,   506,   512,   513,   515,   520,
+     522,   524,   526,   528,   530,   537,   539,   541,   546,   548,
+     550,   555,   557,   562,   564,   566
 };
 #endif
 
@@ -569,16 +854,17 @@ static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
 static const char *const yytname[] =
 {
   "\"end of file\"", "error", "\"invalid token\"", "ALLOCATE", "MAIN",
-  "R_BEGIN", "END", "INPUT", "OUTPUT", "IF", "THEN", "ELSE", "AND", "OR",
-  "DO", "WHILE", "FOR", "TO", "DO_KW", "ASIGNACION", "MAYOR_IGUAL",
-  "MENOR_IGUAL", "COMPARACION_IGUAL", "DIFERENTE", "POTENCIA",
-  "DOS_PUNTOS", "PUNTO_COMA", "MAS", "MENOS", "POR", "ENTRE", "PAR_IZQ",
-  "PAR_DER", "MENOR", "MAYOR", "ID", "NUMERO", "INVALIDO", "$accept",
-  "inicio", "declaracionVariables", "listaDeNombres", "condicionLogica",
+  "INICIO_BLOQUE", "END", "INPUT", "OUTPUT", "IF", "THEN", "ELSE", "AND",
+  "OR", "ASIGNACION", "MAYOR_IGUAL", "MENOR_IGUAL", "COMPARACION_IGUAL",
+  "DIFERENTE", "POTENCIA", "DOS_PUNTOS", "PUNTO_COMA", "MAS", "MENOS",
+  "POR", "ENTRE", "PAR_IZQ", "PAR_DER", "MENOR", "MAYOR", "DO", "WHILE",
+  "FOR", "TO", "ID", "NUMERO", "INVALIDO", "$accept", "inicio",
+  "listaSentencias", "sentencia", "declaracionVariables", "listaDeNombres",
+  "asignacion", "lectura", "escritura", "condicional", "$@1", "cabeceraIf",
+  "bloque", "cicloWhile", "$@2", "$@3", "cicloDoWhile", "$@4", "cicloFor",
+  "cabeceraFor", "limiteInferior", "limiteSuperior", "condicionLogica",
   "comparacionSimple", "expresion", "termino", "potenciaNum",
-  "factorBasico", "cicloDoWhile", "sentenciaWhileDo", "cicloFor",
-  "limiteInferior", "limiteSuperior", "listaSentencias",
-  "sentenciaPuntoComa", "asignacion", "lectura", "escritura", YY_NULLPTR
+  "factorBasico", YY_NULLPTR
 };
 
 static const char *
@@ -588,12 +874,12 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-32)
+#define YYPACT_NINF (-28)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
 
-#define YYTABLE_NINF (-10)
+#define YYTABLE_NINF (-1)
 
 #define yytable_value_is_error(Yyn) \
   0
@@ -602,16 +888,18 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-       6,    -6,   -31,    20,     2,   -32,    14,   -32,     3,    11,
-     -32,    26,    -4,    -8,   -32,   -32,   -32,   -17,    15,    12,
-      37,    35,    39,    48,    56,   -32,    30,   -32,    50,    42,
-      20,    20,    20,    20,    20,    20,    20,    20,    20,    20,
-      20,    20,    20,   -32,   -32,    20,    47,   -32,   -32,   -32,
-       8,   -32,   -32,   -32,   -32,    26,   -32,    36,    36,    36,
-      36,    -4,    -4,    36,    36,    -8,    -8,   -32,    36,    20,
-     -32,   -32,    62,    -2,    31,   -32,   -32,   -32,    66,    76,
-       5,   -32,   -32,     1,   -32,    57,    58,    59,   -32,   -32,
-     -32,   -32,   -32
+       1,     2,    35,   -28,   -28,    11,   -28,   -18,    10,   -20,
+     -28,   -28,    18,    46,   -28,   -28,     6,   -28,   -28,   -28,
+     -28,    51,   -28,   -28,   -28,    51,    56,    61,    23,   -28,
+     -28,    49,   -28,    73,   -14,    65,   -28,    51,    68,    89,
+      23,    83,    29,   -28,    59,   -28,   -28,   -28,    23,    24,
+      58,   -28,    23,    23,    23,    23,    23,    23,    23,    23,
+      23,    23,    23,    23,    23,    74,    23,    -3,    43,   -28,
+     -28,    16,   -28,   -19,    96,   -28,   -28,   -28,    45,    45,
+      45,    45,   -14,   -14,    45,    45,    65,    65,   -28,    81,
+      26,   -28,   -28,    75,   -28,   -28,    51,   -28,    23,    79,
+      44,   -28,    42,   -28,   -28,   -28,    80,    90,    51,   -28,
+     -28,   -28
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -619,30 +907,34 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       0,     0,     0,     0,    28,    27,     0,     2,     0,     4,
-      12,     3,    21,    24,    26,     5,     6,     0,     0,     0,
-       0,     0,     0,     0,     0,    28,     0,     1,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,    48,    49,     0,     0,    31,    33,    32,
-       0,    29,     7,     8,    10,     0,    11,    16,    15,    17,
-      18,    19,    20,    13,    14,    22,    23,    25,    47,     0,
-      36,    35,     0,     0,     0,    30,    38,    37,     0,     0,
-      41,    45,    46,     0,    40,     0,     0,     0,    34,    39,
-      42,    43,    44
+       0,     0,     0,     3,     1,     0,     2,     0,     0,     0,
+      28,    25,     0,    14,     4,     5,     0,     6,     7,     8,
+       9,     0,    10,    11,    12,     0,     0,     0,     0,    54,
+      53,     0,    36,     0,    47,    50,    52,     0,     0,     0,
+       0,     0,     0,     3,    19,    30,    17,    18,     0,     0,
+       0,    23,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,    13,
+      15,     0,    20,     0,     0,    55,    37,    38,    42,    41,
+      43,    44,    45,    46,    39,    40,    48,    49,    51,     0,
+       0,    33,    32,     0,    16,    24,     0,    22,     0,     0,
+       0,    21,     0,    26,    35,    34,     0,     0,     0,    31,
+      29,    27
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -32,   -32,   -32,   -32,    13,    38,     0,    34,    32,    44,
-      87,   -32,    88,   -32,   -32,   -32,     7,    90,    91,    92
+     -28,   -28,    69,   -28,   -28,   -28,   -28,   -28,   -28,   -28,
+     -28,   -28,   -25,   -28,   -28,   -28,   -28,   -28,   -28,   -28,
+     -28,   -28,   -26,    40,   -27,    39,    37,    50
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     6,     7,     8,     9,    10,    55,    12,    13,    14,
-      81,    20,    82,    72,    78,    83,    84,    85,    86,    87
+       0,     2,     5,    14,    15,    16,    17,    18,    19,    20,
+      96,    21,    44,    22,    38,   108,    23,    37,    24,    25,
+      93,   106,    31,    32,    33,    34,    35,    36
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -650,66 +942,74 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      11,    17,    18,    26,    24,    -9,    28,    88,    17,    18,
-      30,    31,    17,    18,    27,     1,    42,     2,    43,     1,
-       1,     2,     2,    30,    31,    40,    41,    -9,    29,    19,
-      75,    45,    57,    58,    59,    60,    19,     3,    63,    64,
-      19,     4,     5,    70,    71,    68,    32,    33,    34,    35,
-      44,     3,    46,    36,    37,    25,     5,    36,    37,    38,
-      39,    47,    51,    36,    37,    48,    76,    77,    54,    56,
-      61,    62,    65,    66,    49,    50,    52,    53,    69,    74,
-      79,    80,    73,    90,    91,    92,    67,    15,    16,     0,
-      89,    21,    22,    23
+      45,    50,    49,    58,    59,     1,    28,     3,    75,    41,
+      62,    63,    65,    68,    29,    30,    26,     6,     7,     8,
+       9,    73,    95,     7,     8,     9,    42,    78,    79,    80,
+      81,    91,    92,    84,    85,     4,    52,    53,    52,    53,
+      90,    10,    11,    12,    27,    13,    10,    11,    12,    48,
+      13,    74,    39,    99,    52,    53,    43,    29,    30,    51,
+      40,    52,    53,    70,    94,    58,    59,    58,    59,   107,
+      72,   101,   102,    54,    55,    56,    57,    46,   104,   105,
+      58,    59,    47,   111,    64,    75,    60,    61,    54,    55,
+      56,    57,    76,    77,    66,    58,    59,    82,    83,    86,
+      87,    60,    61,    67,    69,    89,    97,    98,   100,   103,
+     109,   110,    71,     0,    88
 };
 
 static const yytype_int8 yycheck[] =
 {
-       0,     7,     8,     3,    35,     3,     3,     6,     7,     8,
-      12,    13,     7,     8,     0,    14,    24,    16,    35,    14,
-      14,    16,    16,    12,    13,    29,    30,    25,    25,    35,
-      32,    19,    32,    33,    34,    35,    35,    31,    38,    39,
-      35,    35,    36,    35,    36,    45,    20,    21,    22,    23,
-      35,    31,    15,    27,    28,    35,    36,    27,    28,    33,
-      34,    26,    32,    27,    28,    26,    35,    36,    30,    31,
-      36,    37,    40,    41,    26,    19,    26,    35,    31,    17,
-      14,     5,    69,    26,    26,    26,    42,     0,     0,    -1,
-      83,     1,     1,     1
+      25,    28,    28,    22,    23,     4,    26,     5,    27,     3,
+      24,    25,    37,    40,    34,    35,    34,     6,     7,     8,
+       9,    48,     6,     7,     8,     9,    20,    54,    55,    56,
+      57,    34,    35,    60,    61,     0,    12,    13,    12,    13,
+      66,    30,    31,    32,    34,    34,    30,    31,    32,    26,
+      34,    27,    34,    27,    12,    13,     5,    34,    35,    10,
+      14,    12,    13,    34,    21,    22,    23,    22,    23,    27,
+      11,    96,    98,    15,    16,    17,    18,    21,    34,    35,
+      22,    23,    21,   108,    19,    27,    28,    29,    15,    16,
+      17,    18,    52,    53,    26,    22,    23,    58,    59,    62,
+      63,    28,    29,    14,    21,    31,    10,    26,    33,    30,
+      30,    21,    43,    -1,    64
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,    14,    16,    31,    35,    36,    39,    40,    41,    42,
-      43,    44,    45,    46,    47,    48,    50,     7,     8,    35,
-      49,    55,    56,    57,    35,    35,    44,     0,     3,    25,
-      12,    13,    20,    21,    22,    23,    27,    28,    33,    34,
-      29,    30,    24,    35,    35,    19,    15,    26,    26,    26,
-      19,    32,    26,    35,    43,    44,    43,    44,    44,    44,
-      44,    45,    45,    44,    44,    46,    46,    47,    44,    31,
-      35,    36,    51,    42,    17,    32,    35,    36,    52,    14,
-       5,    48,    50,    53,    54,    55,    56,    57,     6,    54,
-      26,    26,    26
+       0,     4,    38,     5,     0,    39,     6,     7,     8,     9,
+      30,    31,    32,    34,    40,    41,    42,    43,    44,    45,
+      46,    48,    50,    53,    55,    56,    34,    34,    26,    34,
+      35,    59,    60,    61,    62,    63,    64,    54,    51,    34,
+      14,     3,    20,     5,    49,    49,    21,    21,    26,    59,
+      61,    10,    12,    13,    15,    16,    17,    18,    22,    23,
+      28,    29,    24,    25,    19,    49,    26,    14,    61,    21,
+      34,    39,    11,    61,    27,    27,    60,    60,    61,    61,
+      61,    61,    62,    62,    61,    61,    63,    63,    64,    31,
+      59,    34,    35,    57,    21,     6,    47,    10,    26,    27,
+      33,    49,    59,    30,    34,    35,    58,    27,    52,    30,
+      21,    49
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    38,    39,    39,    39,    39,    39,    40,    41,    41,
-      42,    42,    42,    43,    43,    43,    43,    43,    43,    44,
-      44,    44,    45,    45,    45,    46,    46,    47,    47,    47,
-      48,    49,    49,    49,    50,    51,    51,    52,    52,    53,
-      53,    53,    54,    54,    54,    54,    54,    55,    56,    57
+       0,    37,    38,    39,    39,    40,    40,    40,    40,    40,
+      40,    40,    40,    41,    42,    42,    43,    44,    45,    46,
+      47,    46,    48,    48,    49,    51,    52,    50,    54,    53,
+      55,    56,    57,    57,    58,    58,    59,    59,    59,    60,
+      60,    60,    60,    60,    60,    61,    61,    61,    62,    62,
+      62,    63,    63,    64,    64,    64
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     1,     1,     1,     1,     1,     3,     3,     1,
-       3,     3,     1,     3,     3,     3,     3,     3,     3,     3,
-       3,     1,     3,     3,     1,     3,     1,     1,     1,     3,
-       6,     2,     2,     2,    10,     1,     1,     1,     1,     2,
-       1,     0,     2,     2,     2,     1,     1,     3,     2,     2
+       0,     2,     4,     0,     2,     1,     1,     1,     1,     1,
+       1,     1,     1,     3,     1,     3,     4,     3,     3,     2,
+       0,     5,     5,     3,     3,     0,     0,     8,     0,     8,
+       2,     7,     1,     1,     1,     1,     1,     3,     3,     3,
+       3,     3,     3,     3,     3,     3,     3,     1,     3,     3,
+       1,     3,     1,     1,     1,     3
 };
 
 
@@ -1172,8 +1472,329 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
+  case 2: /* inicio: MAIN INICIO_BLOQUE listaSentencias END  */
+#line 307 "proyectoFinal.y"
+        {
+            fprintf(stderr,
+                "\nTDC generado correctamente\n");
+        }
+#line 1482 "proyectoFinal.tab.c"
+    break;
 
-#line 1177 "proyectoFinal.tab.c"
+  case 16: /* asignacion: ID ASIGNACION expresion PUNTO_COMA  */
+#line 343 "proyectoFinal.y"
+        { printf("%s=%s\n", (yyvsp[-3].cadena), (yyvsp[-1].cadena)); }
+#line 1488 "proyectoFinal.tab.c"
+    break;
+
+  case 17: /* lectura: INPUT ID PUNTO_COMA  */
+#line 350 "proyectoFinal.y"
+        {
+            printf("push %s\n", (yyvsp[-1].cadena));
+            printf("call input\n");
+            printf("pop %s\n", (yyvsp[-1].cadena));
+        }
+#line 1498 "proyectoFinal.tab.c"
+    break;
+
+  case 18: /* escritura: OUTPUT ID PUNTO_COMA  */
+#line 359 "proyectoFinal.y"
+        {
+            printf("push %s\n", (yyvsp[-1].cadena));
+            printf("call output\n");
+        }
+#line 1507 "proyectoFinal.tab.c"
+    break;
+
+  case 19: /* condicional: cabeceraIf bloque  */
+#line 369 "proyectoFinal.y"
+        {
+            char etiqueta[50];
+            desapilarEtiqueta(etiqueta);
+            printf("%s:\n", etiqueta);
+        }
+#line 1517 "proyectoFinal.tab.c"
+    break;
+
+  case 20: /* $@1: %empty  */
+#line 375 "proyectoFinal.y"
+        {
+            char etiquetaSalida[50];
+            char etiquetaFin[50];
+            nuevaEtiqueta(etiquetaFin);
+            printf("goto %s\n", etiquetaFin);
+            desapilarEtiqueta(etiquetaSalida);
+            printf("%s:\n", etiquetaSalida);
+            apilarEtiqueta(etiquetaFin);
+        }
+#line 1531 "proyectoFinal.tab.c"
+    break;
+
+  case 21: /* condicional: cabeceraIf bloque ELSE $@1 bloque  */
+#line 385 "proyectoFinal.y"
+        {
+            char etiqueta[50];
+            desapilarEtiqueta(etiqueta);
+            printf("%s:\n", etiqueta);
+        }
+#line 1541 "proyectoFinal.tab.c"
+    break;
+
+  case 22: /* cabeceraIf: IF PAR_IZQ condicionLogica PAR_DER THEN  */
+#line 394 "proyectoFinal.y"
+        {
+            char etiqueta[50];
+            nuevaEtiqueta(etiqueta);
+            apilarEtiqueta(etiqueta);
+            printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiqueta);
+        }
+#line 1552 "proyectoFinal.tab.c"
+    break;
+
+  case 23: /* cabeceraIf: IF condicionLogica THEN  */
+#line 401 "proyectoFinal.y"
+        {
+            char etiqueta[50];
+            nuevaEtiqueta(etiqueta);
+            apilarEtiqueta(etiqueta);
+            printf("ifZ %s goto %s\n", (yyvsp[-1].cadena), etiqueta);
+        }
+#line 1563 "proyectoFinal.tab.c"
+    break;
+
+  case 25: /* $@2: %empty  */
+#line 420 "proyectoFinal.y"
+        {
+            char etiquetaInicio[50];
+            nuevaEtiqueta(etiquetaInicio);
+            printf("%s:\n", etiquetaInicio);
+            apilarEtiqueta(etiquetaInicio);
+        }
+#line 1574 "proyectoFinal.tab.c"
+    break;
+
+  case 26: /* $@3: %empty  */
+#line 427 "proyectoFinal.y"
+        {
+            char etiquetaFin[50];
+            nuevaEtiqueta(etiquetaFin);
+            printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiquetaFin);
+            apilarEtiqueta(etiquetaFin);
+        }
+#line 1585 "proyectoFinal.tab.c"
+    break;
+
+  case 27: /* cicloWhile: WHILE $@2 PAR_IZQ condicionLogica PAR_DER DO $@3 bloque  */
+#line 434 "proyectoFinal.y"
+        {
+            char etiquetaFin[50];
+            char etiquetaInicio[50];
+            desapilarEtiqueta(etiquetaFin);
+            desapilarEtiqueta(etiquetaInicio);
+            printf("goto %s\n", etiquetaInicio);
+            printf("%s:\n", etiquetaFin);
+        }
+#line 1598 "proyectoFinal.tab.c"
+    break;
+
+  case 28: /* $@4: %empty  */
+#line 448 "proyectoFinal.y"
+        {
+            char etiquetaInicio[50];
+            nuevaEtiqueta(etiquetaInicio);
+            printf("%s:\n", etiquetaInicio);
+            apilarEtiqueta(etiquetaInicio);
+        }
+#line 1609 "proyectoFinal.tab.c"
+    break;
+
+  case 29: /* cicloDoWhile: DO $@4 bloque WHILE PAR_IZQ condicionLogica PAR_DER PUNTO_COMA  */
+#line 455 "proyectoFinal.y"
+        {
+            char etiquetaInicio[50];
+            desapilarEtiqueta(etiquetaInicio);
+            printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiquetaInicio);
+        }
+#line 1619 "proyectoFinal.tab.c"
+    break;
+
+  case 30: /* cicloFor: cabeceraFor bloque  */
+#line 466 "proyectoFinal.y"
+        {
+            char etiquetaFin[50];
+            char etiquetaInicio[50];
+            desapilarEtiqueta(etiquetaFin);
+            desapilarEtiqueta(etiquetaInicio);
+            printf("%s=%s+1\n", (yyvsp[-1].cadena), (yyvsp[-1].cadena));
+            printf("goto %s\n", etiquetaInicio);
+            printf("%s:\n", etiquetaFin);
+        }
+#line 1633 "proyectoFinal.tab.c"
+    break;
+
+  case 31: /* cabeceraFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO  */
+#line 479 "proyectoFinal.y"
+        {
+            char etiquetaInicio[50];
+            char etiquetaFin[50];
+            char temporal[50];
+
+            strcpy((yyval.cadena), (yyvsp[-5].cadena));                    /* variable del ciclo */
+            nuevaTemp(temporal);
+            nuevaEtiqueta(etiquetaInicio);
+            nuevaEtiqueta(etiquetaFin);
+
+            printf("%s=%s\n", (yyvsp[-5].cadena), (yyvsp[-3].cadena));         /* id = limiteInferior   */
+            printf("%s=%s\n", temporal, (yyvsp[-1].cadena));   /* t  = limiteSuperior   */
+            printf("%s:\n", etiquetaInicio);
+            printf("ifZ %s<=%s goto %s\n", (yyvsp[-5].cadena), temporal, etiquetaFin);
+
+            apilarEtiqueta(etiquetaInicio);
+            apilarEtiqueta(etiquetaFin);
+        }
+#line 1656 "proyectoFinal.tab.c"
+    break;
+
+  case 32: /* limiteInferior: NUMERO  */
+#line 500 "proyectoFinal.y"
+               { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1662 "proyectoFinal.tab.c"
+    break;
+
+  case 33: /* limiteInferior: ID  */
+#line 501 "proyectoFinal.y"
+               { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1668 "proyectoFinal.tab.c"
+    break;
+
+  case 34: /* limiteSuperior: NUMERO  */
+#line 505 "proyectoFinal.y"
+               { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1674 "proyectoFinal.tab.c"
+    break;
+
+  case 35: /* limiteSuperior: ID  */
+#line 506 "proyectoFinal.y"
+               { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1680 "proyectoFinal.tab.c"
+    break;
+
+  case 37: /* condicionLogica: condicionLogica AND comparacionSimple  */
+#line 514 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s and %s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1686 "proyectoFinal.tab.c"
+    break;
+
+  case 38: /* condicionLogica: condicionLogica OR comparacionSimple  */
+#line 516 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s or %s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1692 "proyectoFinal.tab.c"
+    break;
+
+  case 39: /* comparacionSimple: expresion MENOR expresion  */
+#line 521 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s<%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1698 "proyectoFinal.tab.c"
+    break;
+
+  case 40: /* comparacionSimple: expresion MAYOR expresion  */
+#line 523 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s>%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1704 "proyectoFinal.tab.c"
+    break;
+
+  case 41: /* comparacionSimple: expresion MENOR_IGUAL expresion  */
+#line 525 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s<=%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1710 "proyectoFinal.tab.c"
+    break;
+
+  case 42: /* comparacionSimple: expresion MAYOR_IGUAL expresion  */
+#line 527 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s>=%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1716 "proyectoFinal.tab.c"
+    break;
+
+  case 43: /* comparacionSimple: expresion COMPARACION_IGUAL expresion  */
+#line 529 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s==%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1722 "proyectoFinal.tab.c"
+    break;
+
+  case 44: /* comparacionSimple: expresion DIFERENTE expresion  */
+#line 531 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s<>%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1728 "proyectoFinal.tab.c"
+    break;
+
+  case 45: /* expresion: expresion MAS termino  */
+#line 538 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s+%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1734 "proyectoFinal.tab.c"
+    break;
+
+  case 46: /* expresion: expresion MENOS termino  */
+#line 540 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s-%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1740 "proyectoFinal.tab.c"
+    break;
+
+  case 47: /* expresion: termino  */
+#line 542 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1746 "proyectoFinal.tab.c"
+    break;
+
+  case 48: /* termino: termino POR potenciaNum  */
+#line 547 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s*%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1752 "proyectoFinal.tab.c"
+    break;
+
+  case 49: /* termino: termino ENTRE potenciaNum  */
+#line 549 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s/%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1758 "proyectoFinal.tab.c"
+    break;
+
+  case 50: /* termino: potenciaNum  */
+#line 551 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1764 "proyectoFinal.tab.c"
+    break;
+
+  case 51: /* potenciaNum: potenciaNum POTENCIA factorBasico  */
+#line 556 "proyectoFinal.y"
+        { nuevaTemp((yyval.cadena)); printf("%s=%s**%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
+#line 1770 "proyectoFinal.tab.c"
+    break;
+
+  case 52: /* potenciaNum: factorBasico  */
+#line 558 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1776 "proyectoFinal.tab.c"
+    break;
+
+  case 53: /* factorBasico: NUMERO  */
+#line 563 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1782 "proyectoFinal.tab.c"
+    break;
+
+  case 54: /* factorBasico: ID  */
+#line 565 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
+#line 1788 "proyectoFinal.tab.c"
+    break;
+
+  case 55: /* factorBasico: PAR_IZQ expresion PAR_DER  */
+#line 567 "proyectoFinal.y"
+        { strcpy((yyval.cadena), (yyvsp[-1].cadena)); }
+#line 1794 "proyectoFinal.tab.c"
+    break;
+
+
+#line 1798 "proyectoFinal.tab.c"
 
       default: break;
     }
@@ -1366,14 +1987,36 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 82 "proyectoFinal.y"
+#line 570 "proyectoFinal.y"
 
-int main(){
-    yyparse();
-    return 0;
+
+int main(void) {
+    FILE *f_tac = freopen("codigo.tac", "w", stdout);
+    if (!f_tac) {
+        fprintf(stderr, "Error crítico: No se pudo crear el archivo codigo.tac\n");
+        return 1;
+    }
+
+    int resultado = yyparse();
+    fclose(f_tac);
+
+    if (resultado == 0) {
+        fprintf(stderr, "\n[OK] Programa sintacticamente correcto.\n");
+        fprintf(stderr, "[OK] Codigo Intermedio (TAC) generado en 'codigo.tac'.\n");
+        
+        /* Ejecuta la traducción modular nativa a NASM */
+        traducirTacANasm("codigo.tac", "codigo.asm");
+        fprintf(stderr, "[OK] Ensamblador NASM generado en 'codigo.asm'.\n");
+    } else {
+        fprintf(stderr, "\nEl programa contiene errores sintacticos.\n");
+    }
+
+    return resultado;
 }
-void yyerror(char *mensaje){
-        extern int yylineno;
-        extern char *yytext;
-    fprintf(stderr, "Error:  %s en la linea %i cerca de %s\n", mensaje, yylineno, yytext);
+
+void yyerror(const char *mensaje)
+{
+    fprintf(stderr,
+        "Error sintactico en linea %d cerca de '%s': %s\n",
+        yylineno, yytext, mensaje);
 }
