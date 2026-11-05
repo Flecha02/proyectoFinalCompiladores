@@ -1,26 +1,16 @@
-<<<<<<< HEAD
-push x
+push_dir x
 call input
-pop x
-push y
+push_dir y
 call input
-pop y
-t1=x<10
-t2=y>0
-t3=t1 and t2
-ifZ t3 goto l1
-res=1
+t1=1+x
+z=t1
+t2=x<y
+ifZ t2 goto l1
+t3=x+y
+z=t3
 goto l2
 l1:
-res=0
+z=0
 l2:
-push res
-=======
-push_dir b
-call input
-t1=1+2
-t2=t1+b
-a=t2
-push a
->>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
+push z
 call output
