@@ -48,7 +48,7 @@ sentenciaWhileDo: asignacion PUNTO_COMA
                 ;
 
 /* Ciclo For */
-cicloFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO R_BEGIN listaSentencias END
+cicloFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO_KW R_BEGIN listaSentencias END
         ;
 
 limiteInferior: NUMERO
