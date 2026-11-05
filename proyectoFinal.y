@@ -456,15 +456,9 @@ cabeceraIf:
         }
     ;
 
-<<<<<<< HEAD
-/* Ciclo For */
-cicloFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO_KW R_BEGIN listaSentencias END
-        ;
-=======
 bloque:
       INICIO_BLOQUE listaSentencias END
     ;
->>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 
 /*Ciclo WHILE*/
 cicloWhile:

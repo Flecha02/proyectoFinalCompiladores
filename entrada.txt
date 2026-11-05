@@ -1,6 +1,0 @@
-FOR i := 1 to 5 do
-BEGIN
-total := total + 1;
-END
-
-

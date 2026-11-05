@@ -1,7 +1,10 @@
+*** Ejemplo 1: Aritmetica, IO y Potencia ***
 MAIN
 BEGIN
-    a:b ALLOCATE;
-    INPUT b;
-    a := 1 + 2 + b;
-    OUTPUT a;
+    base:expo:resultado ALLOCATE;
+    INPUT base;
+    INPUT expo;
+    
+    resultado := expo ** base;
+    OUTPUT resultado;
 END
