@@ -97,18 +97,18 @@ export default function EasyLangIDE() {
             onClick={handleFileAction.bind(null, 'open')}
             className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition font-medium border border-slate-300"
           >
-            📂 Abrir (.el)
+            Abrir (.el)
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded transition font-semibold shadow-sm"
           >
-            👥 Integrantes
+            Integrantes
           </button>
         </div>
       </header>
 
-      {/* Panel Principal dividido con scroll adecuado */}
+  
       <div className="grid grid-cols-1 lg:grid-cols-3 flex-1 p-4 gap-4 overflow-hidden">
         
         {/* Editor de Código Fuente (.el) */}
@@ -119,7 +119,7 @@ export default function EasyLangIDE() {
               onClick={handleCompileBackend}
               className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition shadow-sm"
             >
-              ⚙️ Generar Código
+              Generar Código
             </button>
           </div>
           <div className="flex-1 relative overflow-hidden rounded border border-slate-300 bg-slate-50">
@@ -132,7 +132,7 @@ export default function EasyLangIDE() {
           </div>
         </div>
 
-        {/* Panel Central: Código Intermedio y Assembler NASM (Con scroll completo) */}
+        {/* Panel Central: Código Intermedio y Assembler NASM */}
         <div className="flex flex-col space-y-4 overflow-hidden">
           {/* Código de Tres Direcciones */}
           <div className="flex flex-col flex-1 bg-white rounded-lg border border-slate-200 p-3 shadow-sm overflow-hidden">
@@ -154,7 +154,7 @@ export default function EasyLangIDE() {
                 onClick={handleExecute}
                 className="px-2.5 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded font-bold transition shadow-sm"
               >
-                ▶️ Ejecutar
+                Ejecutar
               </button>
             </div>
             <div className="flex-1 relative overflow-hidden rounded border border-slate-300 bg-slate-50">
@@ -177,7 +177,7 @@ export default function EasyLangIDE() {
 
       </div>
 
-      {/* Ventana Emergente (Modal) de Integrantes */}
+      {/* Ventana Emergente de Integrantes */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 p-6 rounded-xl w-full max-w-sm shadow-xl">
