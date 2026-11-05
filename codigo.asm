@@ -9,52 +9,29 @@ section .data
     fmt_scan  db "%d", 0
 
 section .bss
-    x resd 1
-    y resd 1
-    i resd 1
-    res resd 1
+    push_dir resd 1
+    b resd 1
+    a resd 1
     t1 resd 1
     t2 resd 1
-    t3 resd 1
 
 section .text
 main:
     push ebp
     mov ebp, esp
 
-    push dword [x]
+    push b
     call input
     add esp, 4
-    push dword [y]
-    call input
-    add esp, 4
-    mov eax, [x]
-    cmp eax, 10
-    jl ._t1_true
-    mov dword [t1], 0
-    jmp ._t1_fin
-._t1_true:
-    mov dword [t1], 1
-._t1_fin:
-    mov eax, [y]
-    cmp eax, 0
-    jg ._t2_true
-    mov dword [t2], 0
-    jmp ._t2_fin
-._t2_true:
-    mov dword [t2], 1
-._t2_fin:
-    mov eax, [t1 and t2]
-    mov [t3], eax
-    mov eax, [t3]
-    cmp eax, 0
-    je l1
-    mov dword [res], 1
-    jmp l2
-l1:
-    mov dword [res], 0
-l2:
-    push dword [res]
+    mov eax, 1
+    add eax, 2
+    mov [t1], eax
+    mov eax, [t1]
+    add eax, [b]
+    mov [t2], eax
+    mov eax, [t2]
+    mov [a], eax
+    push dword [a]
     call output
     add esp, 4
 

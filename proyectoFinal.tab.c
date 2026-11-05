@@ -81,39 +81,68 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
         return;
     }
 
-    /* Arreglos para registrar qué variables y temporales se usan realmente */
-    int usados_t[200] = {0}; // Para t1, t2, ... t199
-    int usa_x = 0, usa_y = 0, usa_z = 0, usa_i = 0, usa_total = 0;
-    int usa_limite = 0, usa_contador = 0, usa_resultado = 0, usa_res = 0;
+    char variables[100][50];
+    int num_variables = 0;
+    int usados_t[500] = {0};
 
-    /* PASO 1: Escanear el TAC para ver qué variables y temporales existen */
     char linea[256];
+
+    /* PASO 1: Escanear el TAC y recolectar CUALQUIER variable automáticamente (filtrando palabras clave) */
     while (fgets(linea, sizeof(linea), in)) {
         linea[strcspn(linea, "\r\n")] = 0;
         if (strlen(linea) == 0) continue;
 
-        /* Detectar temporales tX */
-        for (int i = 1; i < 200; i++) {
+        /* A. Detectar temporales tX */
+        for (int i = 1; i < 500; i++) {
             char t_str[20];
             sprintf(t_str, "t%d", i);
             if (strstr(linea, t_str)) {
                 usados_t[i] = 1;
             }
         }
-        /* Detectar variables conocidas */
-        if (strstr(linea, " x")) usa_x = 1;
-        if (strstr(linea, " y")) usa_y = 1;
-        if (strstr(linea, " z")) usa_z = 1;
-        if (strstr(linea, " i")) usa_i = 1;
-        if (strstr(linea, "total")) usa_total = 1;
-        if (strstr(linea, "limite")) usa_limite = 1;
-        if (strstr(linea, "contador")) usa_contador = 1;
-        if (strstr(linea, "resultado")) usa_resultado = 1;
-        if (strstr(linea, "res")) usa_res = 1;
-    }
-    rewind(in); // Regresar al inicio del archivo TAC para la traducción real
 
-    /* Cabecera obligatoria de NASM */
+        /* B. Extraer tokens/palabras de la línea para detectar variables reales */
+        char copia[256];
+        strcpy(copia, linea);
+        char *token = strtok(copia, " =+-*/<>:\t\r\n()");
+        while (token != NULL) {
+            if ((token[0] >= 'a' && token[0] <= 'z') || (token[0] >= 'A' && token[0] <= 'Z')) {
+                // Filtrar si es un temporal t1..t499
+                int es_temp = 0;
+                if (token[0] == 't') {
+                    int es_num = 1;
+                    for (int k = 1; k < strlen(token); k++) {
+                        if (token[k] < '0' || token[k] > '9') { es_num = 0; break; }
+                    }
+                    if (strlen(token) > 1 && es_num) es_temp = 1;
+                }
+
+                // Filtrar palabras reservadas de control e I/O
+                if (!es_temp) {
+                    if (strcmp(token, "goto") != 0 && strcmp(token, "ifZ") != 0 && 
+                        strcmp(token, "call") != 0 && strcmp(token, "push") != 0 &&
+                        strcmp(token, "pop") != 0  && strcmp(token, "input") != 0 && 
+                        strcmp(token, "output") != 0) {
+                        
+                        int existe = 0;
+                        for (int v = 0; v < num_variables; v++) {
+                            if (strcmp(variables[v], token) == 0) {
+                                existe = 1;
+                                break;
+                            }
+                        }
+                        if (!existe && num_variables < 100) {
+                            strcpy(variables[num_variables++], token);
+                        }
+                    }
+                }
+            }
+            token = strtok(NULL, " =+-*/<>:\t\r\n()");
+        }
+    }
+    rewind(in);
+
+    /* Cabecera NASM */
     fprintf(out, "bits 32\n\n");
     fprintf(out, "global main\n");
     fprintf(out, "extern printf\n");
@@ -123,19 +152,14 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    fmt_scan  db \"%%d\", 0\n\n");
     
     fprintf(out, "section .bss\n");
-    /* Declarar SOLO las variables que detectó que se usaron */
-    if (usa_x)        fprintf(out, "    x resd 1\n");
-    if (usa_y)        fprintf(out, "    y resd 1\n");
-    if (usa_z)        fprintf(out, "    z resd 1\n");
-    if (usa_i)        fprintf(out, "    i resd 1\n");
-    if (usa_total)    fprintf(out, "    total resd 1\n");
-    if (usa_limite)   fprintf(out, "    limite resd 1\n");
-    if (usa_contador) fprintf(out, "    contador resd 1\n");
-    if (usa_resultado)fprintf(out, "    resultado resd 1\n");
-    if (usa_res)      fprintf(out, "    res resd 1\n");
+    
+    /* Declarar únicamente las variables limpias detectadas */
+    for (int v = 0; v < num_variables; v++) {
+        fprintf(out, "    %s resd 1\n", variables[v]);
+    }
 
-    /* Declarar SOLO los temporales que realmente aparecieron en el TAC */
-    for (int i = 1; i < 200; i++) {
+    /* Declarar los temporales usados */
+    for (int i = 1; i < 500; i++) {
         if (usados_t[i]) {
             fprintf(out, "    t%d resd 1\n", i);
         }
@@ -146,7 +170,7 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    push ebp\n");
     fprintf(out, "    mov ebp, esp\n\n");
 
-    /* PASO 2: Traducir línea por línea el TAC a NASM (manteniendo tu lógica actual) */
+    /* PASO 2: Traducir instrucción por instrucción */
     while (fgets(linea, sizeof(linea), in)) {
         linea[strcspn(linea, "\r\n")] = 0;
         if (strlen(linea) == 0) continue;
@@ -178,9 +202,17 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
                 fprintf(out, "    push %s\n", var);
             }
         }
+        else if (strncmp(linea, "push_dir ", 9) == 0) {
+            char var[50];
+            sscanf(linea, "push_dir %s", var);
+            fprintf(out, "    push %s\n", var);
+        }
         else if (strncmp(linea, "call ", 5) == 0) {
             fprintf(out, "    %s\n", linea);
             fprintf(out, "    add esp, 4\n");
+        }
+        else if (strncmp(linea, "pop ", 4) == 0) {
+            continue; 
         }
         /* E. Asignaciones y operaciones */
         else if (strchr(linea, '=')) {
@@ -190,30 +222,30 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             strcpy(dest, linea);
             strcpy(expr, eq + 1);
 
-            if (strstr(expr, "<=") && !strstr(expr, "<")) {
+            if (strstr(expr, "<=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^<]<=%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jle ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
                 fprintf(out, "._%s_true:\n", dest);
                 fprintf(out, "    mov dword [%s], 1\n", dest);
                 fprintf(out, "._%s_fin:\n", dest);
-            } else if (strstr(expr, ">=") && !strstr(expr, ">")) {
+            } else if (strstr(expr, ">=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^>]>=%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jge ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -223,12 +255,12 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, "<") && !strstr(expr, "<=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^<]<%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jl ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -238,12 +270,12 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, ">") && !strstr(expr, ">=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^>]>%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jg ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -253,32 +285,56 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, "+")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^+]+%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    add eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    add eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    add eax, %s\n", op2);
+                else fprintf(out, "    add eax, [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else if (strstr(expr, "-")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^-]-%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    sub eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    sub eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    sub eax, %s\n", op2);
+                else fprintf(out, "    sub eax, [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else if (strstr(expr, "*") && !strstr(expr, "**")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^*]*%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    imul eax, dword %s\n", op2);
+                else fprintf(out, "    imul eax, dword [%s]\n", op2);
+
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "/")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^/]/%s", op1, op2);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                fprintf(out, "    cdq\n");
                 if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    imul eax, dword %s\n", op2);
+                    fprintf(out, "    mov ecx, %s\n", op2);
+                    fprintf(out, "    idiv ecx\n");
                 } else {
-                    fprintf(out, "    imul eax, dword [%s]\n", op2);
+                    fprintf(out, "    idiv dword [%s]\n", op2);
                 }
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "**")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^*]**%s", op1, op2);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    imul eax, %s\n", op2);
+                else fprintf(out, "    imul eax, dword [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else {
                 if (expr[0] >= '0' && expr[0] <= '9') {
@@ -297,7 +353,7 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    xor eax, eax\n");
     fprintf(out, "    ret\n");
 
-    /* Funciones auxiliares I/O embebidas */
+    /* Rutinas I/O */
     fprintf(out, "\nglobal output\noutput:\n");
     fprintf(out, "    push ebp\n    mov ebp, esp\n");
     fprintf(out, "    push dword [ebp+8]\n    push fmt_print\n    call printf\n    add esp, 8\n");
@@ -330,8 +386,7 @@ void nuevaEtiqueta(char *etiqueta)
     sprintf(etiqueta, "l%d", label_count++);
 }
 
-/* Pila LIFO de etiquetas: permite anidar estructuras de control
-   (IF, WHILE, DO-WHILE, FOR) sin mezclar sus etiquetas.        */
+/* Pila LIFO de etiquetas */
 #define MAX_ETIQUETAS 100
 static char pilaEtiquetas[MAX_ETIQUETAS][50];
 static int  topeEtiquetas = 0;
@@ -350,7 +405,7 @@ void desapilarEtiqueta(char *etiqueta)
         etiqueta[0] = '\0';
 }
 
-#line 354 "proyectoFinal.tab.c"
+#line 409 "proyectoFinal.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -832,12 +887,12 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   306,   306,   313,   314,   318,   319,   320,   321,   322,
-     323,   324,   325,   331,   335,   336,   342,   349,   358,   368,
-     375,   374,   393,   400,   410,   420,   427,   419,   448,   447,
-     465,   478,   500,   501,   505,   506,   512,   513,   515,   520,
-     522,   524,   526,   528,   530,   537,   539,   541,   546,   548,
-     550,   555,   557,   562,   564,   566
+       0,   361,   361,   368,   369,   373,   374,   375,   376,   377,
+     378,   379,   380,   385,   389,   390,   395,   401,   409,   418,
+     425,   424,   443,   450,   460,   466,   473,   465,   493,   492,
+     514,   527,   552,   553,   557,   558,   563,   564,   566,   571,
+     573,   575,   577,   579,   581,   587,   589,   591,   596,   598,
+     600,   605,   607,   612,   614,   616
 };
 #endif
 
@@ -1473,51 +1528,50 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* inicio: MAIN INICIO_BLOQUE listaSentencias END  */
-#line 307 "proyectoFinal.y"
+#line 362 "proyectoFinal.y"
         {
             fprintf(stderr,
                 "\nTDC generado correctamente\n");
         }
-#line 1482 "proyectoFinal.tab.c"
+#line 1537 "proyectoFinal.tab.c"
     break;
 
   case 16: /* asignacion: ID ASIGNACION expresion PUNTO_COMA  */
-#line 343 "proyectoFinal.y"
+#line 396 "proyectoFinal.y"
         { printf("%s=%s\n", (yyvsp[-3].cadena), (yyvsp[-1].cadena)); }
-#line 1488 "proyectoFinal.tab.c"
+#line 1543 "proyectoFinal.tab.c"
     break;
 
   case 17: /* lectura: INPUT ID PUNTO_COMA  */
-#line 350 "proyectoFinal.y"
+#line 402 "proyectoFinal.y"
         {
-            printf("push %s\n", (yyvsp[-1].cadena));
+            printf("push_dir %s\n", (yyvsp[-1].cadena));
             printf("call input\n");
-            printf("pop %s\n", (yyvsp[-1].cadena));
         }
-#line 1498 "proyectoFinal.tab.c"
+#line 1552 "proyectoFinal.tab.c"
     break;
 
   case 18: /* escritura: OUTPUT ID PUNTO_COMA  */
-#line 359 "proyectoFinal.y"
+#line 410 "proyectoFinal.y"
         {
             printf("push %s\n", (yyvsp[-1].cadena));
             printf("call output\n");
         }
-#line 1507 "proyectoFinal.tab.c"
+#line 1561 "proyectoFinal.tab.c"
     break;
 
   case 19: /* condicional: cabeceraIf bloque  */
-#line 369 "proyectoFinal.y"
+#line 419 "proyectoFinal.y"
         {
             char etiqueta[50];
             desapilarEtiqueta(etiqueta);
             printf("%s:\n", etiqueta);
         }
-#line 1517 "proyectoFinal.tab.c"
+#line 1571 "proyectoFinal.tab.c"
     break;
 
   case 20: /* $@1: %empty  */
-#line 375 "proyectoFinal.y"
+#line 425 "proyectoFinal.y"
         {
             char etiquetaSalida[50];
             char etiquetaFin[50];
@@ -1527,65 +1581,65 @@ yyreduce:
             printf("%s:\n", etiquetaSalida);
             apilarEtiqueta(etiquetaFin);
         }
-#line 1531 "proyectoFinal.tab.c"
+#line 1585 "proyectoFinal.tab.c"
     break;
 
   case 21: /* condicional: cabeceraIf bloque ELSE $@1 bloque  */
-#line 385 "proyectoFinal.y"
+#line 435 "proyectoFinal.y"
         {
             char etiqueta[50];
             desapilarEtiqueta(etiqueta);
             printf("%s:\n", etiqueta);
         }
-#line 1541 "proyectoFinal.tab.c"
+#line 1595 "proyectoFinal.tab.c"
     break;
 
   case 22: /* cabeceraIf: IF PAR_IZQ condicionLogica PAR_DER THEN  */
-#line 394 "proyectoFinal.y"
+#line 444 "proyectoFinal.y"
         {
             char etiqueta[50];
             nuevaEtiqueta(etiqueta);
             apilarEtiqueta(etiqueta);
             printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiqueta);
         }
-#line 1552 "proyectoFinal.tab.c"
+#line 1606 "proyectoFinal.tab.c"
     break;
 
   case 23: /* cabeceraIf: IF condicionLogica THEN  */
-#line 401 "proyectoFinal.y"
+#line 451 "proyectoFinal.y"
         {
             char etiqueta[50];
             nuevaEtiqueta(etiqueta);
             apilarEtiqueta(etiqueta);
             printf("ifZ %s goto %s\n", (yyvsp[-1].cadena), etiqueta);
         }
-#line 1563 "proyectoFinal.tab.c"
+#line 1617 "proyectoFinal.tab.c"
     break;
 
   case 25: /* $@2: %empty  */
-#line 420 "proyectoFinal.y"
+#line 466 "proyectoFinal.y"
         {
             char etiquetaInicio[50];
             nuevaEtiqueta(etiquetaInicio);
             printf("%s:\n", etiquetaInicio);
             apilarEtiqueta(etiquetaInicio);
         }
-#line 1574 "proyectoFinal.tab.c"
+#line 1628 "proyectoFinal.tab.c"
     break;
 
   case 26: /* $@3: %empty  */
-#line 427 "proyectoFinal.y"
+#line 473 "proyectoFinal.y"
         {
             char etiquetaFin[50];
             nuevaEtiqueta(etiquetaFin);
             printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiquetaFin);
             apilarEtiqueta(etiquetaFin);
         }
-#line 1585 "proyectoFinal.tab.c"
+#line 1639 "proyectoFinal.tab.c"
     break;
 
   case 27: /* cicloWhile: WHILE $@2 PAR_IZQ condicionLogica PAR_DER DO $@3 bloque  */
-#line 434 "proyectoFinal.y"
+#line 480 "proyectoFinal.y"
         {
             char etiquetaFin[50];
             char etiquetaInicio[50];
@@ -1594,32 +1648,37 @@ yyreduce:
             printf("goto %s\n", etiquetaInicio);
             printf("%s:\n", etiquetaFin);
         }
-#line 1598 "proyectoFinal.tab.c"
+#line 1652 "proyectoFinal.tab.c"
     break;
 
   case 28: /* $@4: %empty  */
-#line 448 "proyectoFinal.y"
+#line 493 "proyectoFinal.y"
         {
             char etiquetaInicio[50];
             nuevaEtiqueta(etiquetaInicio);
             printf("%s:\n", etiquetaInicio);
             apilarEtiqueta(etiquetaInicio);
         }
-#line 1609 "proyectoFinal.tab.c"
+#line 1663 "proyectoFinal.tab.c"
     break;
 
   case 29: /* cicloDoWhile: DO $@4 bloque WHILE PAR_IZQ condicionLogica PAR_DER PUNTO_COMA  */
-#line 455 "proyectoFinal.y"
+#line 500 "proyectoFinal.y"
         {
             char etiquetaInicio[50];
+            char etiquetaFin[50];
+            nuevaEtiqueta(etiquetaFin);
             desapilarEtiqueta(etiquetaInicio);
-            printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiquetaInicio);
+
+            printf("ifZ %s goto %s\n", (yyvsp[-2].cadena), etiquetaFin);
+            printf("goto %s\n", etiquetaInicio);
+            printf("%s:\n", etiquetaFin);
         }
-#line 1619 "proyectoFinal.tab.c"
+#line 1678 "proyectoFinal.tab.c"
     break;
 
   case 30: /* cicloFor: cabeceraFor bloque  */
-#line 466 "proyectoFinal.y"
+#line 515 "proyectoFinal.y"
         {
             char etiquetaFin[50];
             char etiquetaInicio[50];
@@ -1629,172 +1688,175 @@ yyreduce:
             printf("goto %s\n", etiquetaInicio);
             printf("%s:\n", etiquetaFin);
         }
-#line 1633 "proyectoFinal.tab.c"
+#line 1692 "proyectoFinal.tab.c"
     break;
 
   case 31: /* cabeceraFor: FOR ID ASIGNACION limiteInferior TO limiteSuperior DO  */
-#line 479 "proyectoFinal.y"
+#line 528 "proyectoFinal.y"
         {
             char etiquetaInicio[50];
             char etiquetaFin[50];
             char temporal[50];
+            char tempCond[50];
 
-            strcpy((yyval.cadena), (yyvsp[-5].cadena));                    /* variable del ciclo */
+            strcpy((yyval.cadena), (yyvsp[-5].cadena));
             nuevaTemp(temporal);
             nuevaEtiqueta(etiquetaInicio);
             nuevaEtiqueta(etiquetaFin);
+            nuevaTemp(tempCond);
 
-            printf("%s=%s\n", (yyvsp[-5].cadena), (yyvsp[-3].cadena));         /* id = limiteInferior   */
-            printf("%s=%s\n", temporal, (yyvsp[-1].cadena));   /* t  = limiteSuperior   */
+            printf("%s=%s\n", (yyvsp[-5].cadena), (yyvsp[-3].cadena));
+            printf("%s=%s\n", temporal, (yyvsp[-1].cadena));
             printf("%s:\n", etiquetaInicio);
-            printf("ifZ %s<=%s goto %s\n", (yyvsp[-5].cadena), temporal, etiquetaFin);
+            printf("%s=%s<=%s\n", tempCond, (yyvsp[-5].cadena), temporal);
+            printf("ifZ %s goto %s\n", tempCond, etiquetaFin);
 
             apilarEtiqueta(etiquetaInicio);
             apilarEtiqueta(etiquetaFin);
         }
-#line 1656 "proyectoFinal.tab.c"
+#line 1718 "proyectoFinal.tab.c"
     break;
 
   case 32: /* limiteInferior: NUMERO  */
-#line 500 "proyectoFinal.y"
+#line 552 "proyectoFinal.y"
                { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1662 "proyectoFinal.tab.c"
+#line 1724 "proyectoFinal.tab.c"
     break;
 
   case 33: /* limiteInferior: ID  */
-#line 501 "proyectoFinal.y"
+#line 553 "proyectoFinal.y"
                { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1668 "proyectoFinal.tab.c"
+#line 1730 "proyectoFinal.tab.c"
     break;
 
   case 34: /* limiteSuperior: NUMERO  */
-#line 505 "proyectoFinal.y"
+#line 557 "proyectoFinal.y"
                { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1674 "proyectoFinal.tab.c"
+#line 1736 "proyectoFinal.tab.c"
     break;
 
   case 35: /* limiteSuperior: ID  */
-#line 506 "proyectoFinal.y"
+#line 558 "proyectoFinal.y"
                { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1680 "proyectoFinal.tab.c"
+#line 1742 "proyectoFinal.tab.c"
     break;
 
   case 37: /* condicionLogica: condicionLogica AND comparacionSimple  */
-#line 514 "proyectoFinal.y"
+#line 565 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s and %s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1686 "proyectoFinal.tab.c"
+#line 1748 "proyectoFinal.tab.c"
     break;
 
   case 38: /* condicionLogica: condicionLogica OR comparacionSimple  */
-#line 516 "proyectoFinal.y"
+#line 567 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s or %s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1692 "proyectoFinal.tab.c"
+#line 1754 "proyectoFinal.tab.c"
     break;
 
   case 39: /* comparacionSimple: expresion MENOR expresion  */
-#line 521 "proyectoFinal.y"
+#line 572 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s<%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1698 "proyectoFinal.tab.c"
+#line 1760 "proyectoFinal.tab.c"
     break;
 
   case 40: /* comparacionSimple: expresion MAYOR expresion  */
-#line 523 "proyectoFinal.y"
+#line 574 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s>%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1704 "proyectoFinal.tab.c"
+#line 1766 "proyectoFinal.tab.c"
     break;
 
   case 41: /* comparacionSimple: expresion MENOR_IGUAL expresion  */
-#line 525 "proyectoFinal.y"
+#line 576 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s<=%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1710 "proyectoFinal.tab.c"
+#line 1772 "proyectoFinal.tab.c"
     break;
 
   case 42: /* comparacionSimple: expresion MAYOR_IGUAL expresion  */
-#line 527 "proyectoFinal.y"
+#line 578 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s>=%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1716 "proyectoFinal.tab.c"
+#line 1778 "proyectoFinal.tab.c"
     break;
 
   case 43: /* comparacionSimple: expresion COMPARACION_IGUAL expresion  */
-#line 529 "proyectoFinal.y"
+#line 580 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s==%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1722 "proyectoFinal.tab.c"
+#line 1784 "proyectoFinal.tab.c"
     break;
 
   case 44: /* comparacionSimple: expresion DIFERENTE expresion  */
-#line 531 "proyectoFinal.y"
+#line 582 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s<>%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1728 "proyectoFinal.tab.c"
+#line 1790 "proyectoFinal.tab.c"
     break;
 
   case 45: /* expresion: expresion MAS termino  */
-#line 538 "proyectoFinal.y"
+#line 588 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s+%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1734 "proyectoFinal.tab.c"
+#line 1796 "proyectoFinal.tab.c"
     break;
 
   case 46: /* expresion: expresion MENOS termino  */
-#line 540 "proyectoFinal.y"
+#line 590 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s-%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1740 "proyectoFinal.tab.c"
+#line 1802 "proyectoFinal.tab.c"
     break;
 
   case 47: /* expresion: termino  */
-#line 542 "proyectoFinal.y"
+#line 592 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1746 "proyectoFinal.tab.c"
+#line 1808 "proyectoFinal.tab.c"
     break;
 
   case 48: /* termino: termino POR potenciaNum  */
-#line 547 "proyectoFinal.y"
+#line 597 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s*%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1752 "proyectoFinal.tab.c"
+#line 1814 "proyectoFinal.tab.c"
     break;
 
   case 49: /* termino: termino ENTRE potenciaNum  */
-#line 549 "proyectoFinal.y"
+#line 599 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s/%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1758 "proyectoFinal.tab.c"
+#line 1820 "proyectoFinal.tab.c"
     break;
 
   case 50: /* termino: potenciaNum  */
-#line 551 "proyectoFinal.y"
+#line 601 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1764 "proyectoFinal.tab.c"
+#line 1826 "proyectoFinal.tab.c"
     break;
 
   case 51: /* potenciaNum: potenciaNum POTENCIA factorBasico  */
-#line 556 "proyectoFinal.y"
+#line 606 "proyectoFinal.y"
         { nuevaTemp((yyval.cadena)); printf("%s=%s**%s\n", (yyval.cadena), (yyvsp[-2].cadena), (yyvsp[0].cadena)); }
-#line 1770 "proyectoFinal.tab.c"
+#line 1832 "proyectoFinal.tab.c"
     break;
 
   case 52: /* potenciaNum: factorBasico  */
-#line 558 "proyectoFinal.y"
+#line 608 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1776 "proyectoFinal.tab.c"
+#line 1838 "proyectoFinal.tab.c"
     break;
 
   case 53: /* factorBasico: NUMERO  */
-#line 563 "proyectoFinal.y"
+#line 613 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1782 "proyectoFinal.tab.c"
+#line 1844 "proyectoFinal.tab.c"
     break;
 
   case 54: /* factorBasico: ID  */
-#line 565 "proyectoFinal.y"
+#line 615 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[0].cadena)); }
-#line 1788 "proyectoFinal.tab.c"
+#line 1850 "proyectoFinal.tab.c"
     break;
 
   case 55: /* factorBasico: PAR_IZQ expresion PAR_DER  */
-#line 567 "proyectoFinal.y"
+#line 617 "proyectoFinal.y"
         { strcpy((yyval.cadena), (yyvsp[-1].cadena)); }
-#line 1794 "proyectoFinal.tab.c"
+#line 1856 "proyectoFinal.tab.c"
     break;
 
 
-#line 1798 "proyectoFinal.tab.c"
+#line 1860 "proyectoFinal.tab.c"
 
       default: break;
     }
@@ -1987,7 +2049,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 570 "proyectoFinal.y"
+#line 620 "proyectoFinal.y"
 
 
 int main(void) {
@@ -2004,7 +2066,6 @@ int main(void) {
         fprintf(stderr, "\n[OK] Programa sintacticamente correcto.\n");
         fprintf(stderr, "[OK] Codigo Intermedio (TAC) generado en 'codigo.tac'.\n");
         
-        /* Ejecuta la traducción modular nativa a NASM */
         traducirTacANasm("codigo.tac", "codigo.asm");
         fprintf(stderr, "[OK] Ensamblador NASM generado en 'codigo.asm'.\n");
     } else {

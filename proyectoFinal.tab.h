@@ -96,7 +96,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 284 "proyectoFinal.y"
+#line 339 "proyectoFinal.y"
 
     char cadena[50];
 

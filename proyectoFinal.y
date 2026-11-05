@@ -11,39 +11,68 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
         return;
     }
 
-    /* Arreglos para registrar qué variables y temporales se usan realmente */
-    int usados_t[200] = {0}; // Para t1, t2, ... t199
-    int usa_x = 0, usa_y = 0, usa_z = 0, usa_i = 0, usa_total = 0;
-    int usa_limite = 0, usa_contador = 0, usa_resultado = 0, usa_res = 0;
+    char variables[100][50];
+    int num_variables = 0;
+    int usados_t[500] = {0};
 
-    /* PASO 1: Escanear el TAC para ver qué variables y temporales existen */
     char linea[256];
+
+    /* PASO 1: Escanear el TAC y recolectar CUALQUIER variable automáticamente (filtrando palabras clave) */
     while (fgets(linea, sizeof(linea), in)) {
         linea[strcspn(linea, "\r\n")] = 0;
         if (strlen(linea) == 0) continue;
 
-        /* Detectar temporales tX */
-        for (int i = 1; i < 200; i++) {
+        /* A. Detectar temporales tX */
+        for (int i = 1; i < 500; i++) {
             char t_str[20];
             sprintf(t_str, "t%d", i);
             if (strstr(linea, t_str)) {
                 usados_t[i] = 1;
             }
         }
-        /* Detectar variables conocidas */
-        if (strstr(linea, " x")) usa_x = 1;
-        if (strstr(linea, " y")) usa_y = 1;
-        if (strstr(linea, " z")) usa_z = 1;
-        if (strstr(linea, " i")) usa_i = 1;
-        if (strstr(linea, "total")) usa_total = 1;
-        if (strstr(linea, "limite")) usa_limite = 1;
-        if (strstr(linea, "contador")) usa_contador = 1;
-        if (strstr(linea, "resultado")) usa_resultado = 1;
-        if (strstr(linea, "res")) usa_res = 1;
-    }
-    rewind(in); // Regresar al inicio del archivo TAC para la traducción real
 
-    /* Cabecera obligatoria de NASM */
+        /* B. Extraer tokens/palabras de la línea para detectar variables reales */
+        char copia[256];
+        strcpy(copia, linea);
+        char *token = strtok(copia, " =+-*/<>:\t\r\n()");
+        while (token != NULL) {
+            if ((token[0] >= 'a' && token[0] <= 'z') || (token[0] >= 'A' && token[0] <= 'Z')) {
+                // Filtrar si es un temporal t1..t499
+                int es_temp = 0;
+                if (token[0] == 't') {
+                    int es_num = 1;
+                    for (int k = 1; k < strlen(token); k++) {
+                        if (token[k] < '0' || token[k] > '9') { es_num = 0; break; }
+                    }
+                    if (strlen(token) > 1 && es_num) es_temp = 1;
+                }
+
+                // Filtrar palabras reservadas de control e I/O
+                if (!es_temp) {
+                    if (strcmp(token, "goto") != 0 && strcmp(token, "ifZ") != 0 && 
+                        strcmp(token, "call") != 0 && strcmp(token, "push") != 0 &&
+                        strcmp(token, "pop") != 0  && strcmp(token, "input") != 0 && 
+                        strcmp(token, "output") != 0) {
+                        
+                        int existe = 0;
+                        for (int v = 0; v < num_variables; v++) {
+                            if (strcmp(variables[v], token) == 0) {
+                                existe = 1;
+                                break;
+                            }
+                        }
+                        if (!existe && num_variables < 100) {
+                            strcpy(variables[num_variables++], token);
+                        }
+                    }
+                }
+            }
+            token = strtok(NULL, " =+-*/<>:\t\r\n()");
+        }
+    }
+    rewind(in);
+
+    /* Cabecera NASM */
     fprintf(out, "bits 32\n\n");
     fprintf(out, "global main\n");
     fprintf(out, "extern printf\n");
@@ -53,19 +82,14 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    fmt_scan  db \"%%d\", 0\n\n");
     
     fprintf(out, "section .bss\n");
-    /* Declarar SOLO las variables que detectó que se usaron */
-    if (usa_x)        fprintf(out, "    x resd 1\n");
-    if (usa_y)        fprintf(out, "    y resd 1\n");
-    if (usa_z)        fprintf(out, "    z resd 1\n");
-    if (usa_i)        fprintf(out, "    i resd 1\n");
-    if (usa_total)    fprintf(out, "    total resd 1\n");
-    if (usa_limite)   fprintf(out, "    limite resd 1\n");
-    if (usa_contador) fprintf(out, "    contador resd 1\n");
-    if (usa_resultado)fprintf(out, "    resultado resd 1\n");
-    if (usa_res)      fprintf(out, "    res resd 1\n");
+    
+    /* Declarar únicamente las variables limpias detectadas */
+    for (int v = 0; v < num_variables; v++) {
+        fprintf(out, "    %s resd 1\n", variables[v]);
+    }
 
-    /* Declarar SOLO los temporales que realmente aparecieron en el TAC */
-    for (int i = 1; i < 200; i++) {
+    /* Declarar los temporales usados */
+    for (int i = 1; i < 500; i++) {
         if (usados_t[i]) {
             fprintf(out, "    t%d resd 1\n", i);
         }
@@ -76,7 +100,7 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    push ebp\n");
     fprintf(out, "    mov ebp, esp\n\n");
 
-    /* PASO 2: Traducir línea por línea el TAC a NASM (manteniendo tu lógica actual) */
+    /* PASO 2: Traducir instrucción por instrucción */
     while (fgets(linea, sizeof(linea), in)) {
         linea[strcspn(linea, "\r\n")] = 0;
         if (strlen(linea) == 0) continue;
@@ -108,9 +132,17 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
                 fprintf(out, "    push %s\n", var);
             }
         }
+        else if (strncmp(linea, "push_dir ", 9) == 0) {
+            char var[50];
+            sscanf(linea, "push_dir %s", var);
+            fprintf(out, "    push %s\n", var);
+        }
         else if (strncmp(linea, "call ", 5) == 0) {
             fprintf(out, "    %s\n", linea);
             fprintf(out, "    add esp, 4\n");
+        }
+        else if (strncmp(linea, "pop ", 4) == 0) {
+            continue; 
         }
         /* E. Asignaciones y operaciones */
         else if (strchr(linea, '=')) {
@@ -120,30 +152,30 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             strcpy(dest, linea);
             strcpy(expr, eq + 1);
 
-            if (strstr(expr, "<=") && !strstr(expr, "<")) {
+            if (strstr(expr, "<=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^<]<=%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jle ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
                 fprintf(out, "._%s_true:\n", dest);
                 fprintf(out, "    mov dword [%s], 1\n", dest);
                 fprintf(out, "._%s_fin:\n", dest);
-            } else if (strstr(expr, ">=") && !strstr(expr, ">")) {
+            } else if (strstr(expr, ">=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^>]>=%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jge ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -153,12 +185,12 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, "<") && !strstr(expr, "<=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^<]<%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jl ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -168,12 +200,12 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, ">") && !strstr(expr, ">=")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^>]>%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    cmp eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    cmp eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    cmp eax, %s\n", op2);
+                else fprintf(out, "    cmp eax, [%s]\n", op2);
+
                 fprintf(out, "    jg ._%s_true\n", dest);
                 fprintf(out, "    mov dword [%s], 0\n", dest);
                 fprintf(out, "    jmp ._%s_fin\n", dest);
@@ -183,32 +215,56 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
             } else if (strstr(expr, "+")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^+]+%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    add eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    add eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    add eax, %s\n", op2);
+                else fprintf(out, "    add eax, [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else if (strstr(expr, "-")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^-]-%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
-                if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    sub eax, %s\n", op2);
-                } else {
-                    fprintf(out, "    sub eax, [%s]\n", op2);
-                }
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    sub eax, %s\n", op2);
+                else fprintf(out, "    sub eax, [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else if (strstr(expr, "*") && !strstr(expr, "**")) {
                 char op1[50], op2[50];
                 sscanf(expr, "%[^*]*%s", op1, op2);
-                fprintf(out, "    mov eax, [%s]\n", op1);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    imul eax, dword %s\n", op2);
+                else fprintf(out, "    imul eax, dword [%s]\n", op2);
+
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "/")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^/]/%s", op1, op2);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                fprintf(out, "    cdq\n");
                 if (op2[0] >= '0' && op2[0] <= '9') {
-                    fprintf(out, "    imul eax, dword %s\n", op2);
+                    fprintf(out, "    mov ecx, %s\n", op2);
+                    fprintf(out, "    idiv ecx\n");
                 } else {
-                    fprintf(out, "    imul eax, dword [%s]\n", op2);
+                    fprintf(out, "    idiv dword [%s]\n", op2);
                 }
+                fprintf(out, "    mov [%s], eax\n", dest);
+            } else if (strstr(expr, "**")) {
+                char op1[50], op2[50];
+                sscanf(expr, "%[^*]**%s", op1, op2);
+                if (op1[0] >= '0' && op1[0] <= '9') fprintf(out, "    mov eax, %s\n", op1);
+                else fprintf(out, "    mov eax, [%s]\n", op1);
+
+                if (op2[0] >= '0' && op2[0] <= '9') fprintf(out, "    imul eax, %s\n", op2);
+                else fprintf(out, "    imul eax, dword [%s]\n", op2);
+
                 fprintf(out, "    mov [%s], eax\n", dest);
             } else {
                 if (expr[0] >= '0' && expr[0] <= '9') {
@@ -227,7 +283,7 @@ void traducirTacANasm(const char *archivoTac, const char *archivoNasm) {
     fprintf(out, "    xor eax, eax\n");
     fprintf(out, "    ret\n");
 
-    /* Funciones auxiliares I/O embebidas */
+    /* Rutinas I/O */
     fprintf(out, "\nglobal output\noutput:\n");
     fprintf(out, "    push ebp\n    mov ebp, esp\n");
     fprintf(out, "    push dword [ebp+8]\n    push fmt_print\n    call printf\n    add esp, 8\n");
@@ -260,8 +316,7 @@ void nuevaEtiqueta(char *etiqueta)
     sprintf(etiqueta, "l%d", label_count++);
 }
 
-/* Pila LIFO de etiquetas: permite anidar estructuras de control
-   (IF, WHILE, DO-WHILE, FOR) sin mezclar sus etiquetas.        */
+/* Pila LIFO de etiquetas */
 #define MAX_ETIQUETAS 100
 static char pilaEtiquetas[MAX_ETIQUETAS][50];
 static int  topeEtiquetas = 0;
@@ -324,9 +379,8 @@ sentencia:
     | cicloDoWhile
     | cicloFor
     ;
-/*Declaraciones*/
-/*ALLOCATE solo declara variables: no genera codigo*/
 
+/*Declaraciones*/
 declaracionVariables:
       listaDeNombres ALLOCATE PUNTO_COMA
     ;
@@ -337,20 +391,17 @@ listaDeNombres:
     ;
 
 /*Asignacion*/
-
 asignacion:
       ID ASIGNACION expresion PUNTO_COMA
         { printf("%s=%s\n", $1, $3); }
     ;
 
 /*Entrada / Salida*/
-
 lectura:
       INPUT ID PUNTO_COMA
         {
-            printf("push %s\n", $2);
+            printf("push_dir %s\n", $2);
             printf("call input\n");
-            printf("pop %s\n", $2);
         }
     ;
 
@@ -363,7 +414,6 @@ escritura:
     ;
 
 /*Condicional IF*/
-
 condicional:
       cabeceraIf bloque
         {
@@ -410,11 +460,7 @@ bloque:
       INICIO_BLOQUE listaSentencias END
     ;
 
-/*Ciclo WHILE
- * La etiqueta de inicio se imprime antes de parsear la
- * condicion: su TDC debe quedar dentro del ciclo para
- * que se re-evalue en cada iteracion*/
-
+/*Ciclo WHILE*/
 cicloWhile:
       WHILE
         {
@@ -442,7 +488,6 @@ cicloWhile:
     ;
 
 /*Ciclo DO-WHILE*/
-
 cicloDoWhile:
       DO
         {
@@ -454,13 +499,17 @@ cicloDoWhile:
       bloque WHILE PAR_IZQ condicionLogica PAR_DER PUNTO_COMA
         {
             char etiquetaInicio[50];
+            char etiquetaFin[50];
+            nuevaEtiqueta(etiquetaFin);
             desapilarEtiqueta(etiquetaInicio);
-            printf("ifZ %s goto %s\n", $6, etiquetaInicio);
+
+            printf("ifZ %s goto %s\n", $6, etiquetaFin);
+            printf("goto %s\n", etiquetaInicio);
+            printf("%s:\n", etiquetaFin);
         }
     ;
 
 /*Ciclo FOR*/
-
 cicloFor:
       cabeceraFor bloque
         {
@@ -480,16 +529,19 @@ cabeceraFor:
             char etiquetaInicio[50];
             char etiquetaFin[50];
             char temporal[50];
+            char tempCond[50];
 
-            strcpy($$, $2);                    /* variable del ciclo */
+            strcpy($$, $2);
             nuevaTemp(temporal);
             nuevaEtiqueta(etiquetaInicio);
             nuevaEtiqueta(etiquetaFin);
+            nuevaTemp(tempCond);
 
-            printf("%s=%s\n", $2, $4);         /* id = limiteInferior   */
-            printf("%s=%s\n", temporal, $6);   /* t  = limiteSuperior   */
+            printf("%s=%s\n", $2, $4);
+            printf("%s=%s\n", temporal, $6);
             printf("%s:\n", etiquetaInicio);
-            printf("ifZ %s<=%s goto %s\n", $2, temporal, etiquetaFin);
+            printf("%s=%s<=%s\n", tempCond, $2, temporal);
+            printf("ifZ %s goto %s\n", tempCond, etiquetaFin);
 
             apilarEtiqueta(etiquetaInicio);
             apilarEtiqueta(etiquetaFin);
@@ -507,7 +559,6 @@ limiteSuperior:
     ;
 
 /*Condiciones logicas*/
-
 condicionLogica:
       comparacionSimple
     | condicionLogica AND comparacionSimple
@@ -532,7 +583,6 @@ comparacionSimple:
     ;
 
 /*Expresiones aritmeticas*/
-
 expresion:
       expresion MAS termino
         { nuevaTemp($$); printf("%s=%s+%s\n", $$, $1, $3); }
@@ -583,7 +633,6 @@ int main(void) {
         fprintf(stderr, "\n[OK] Programa sintacticamente correcto.\n");
         fprintf(stderr, "[OK] Codigo Intermedio (TAC) generado en 'codigo.tac'.\n");
         
-        /* Ejecuta la traducción modular nativa a NASM */
         traducirTacANasm("codigo.tac", "codigo.asm");
         fprintf(stderr, "[OK] Ensamblador NASM generado en 'codigo.asm'.\n");
     } else {
