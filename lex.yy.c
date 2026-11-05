@@ -519,11 +519,19 @@ int yy_flex_debug = 0;
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
 char *yytext;
+<<<<<<< HEAD
 #line 1 "proyectoTDC.l"
 #line 2 "proyectoTDC.l"
 #include <stdio.h>
 #include <string.h>
 #include "proyectoTDC.tab.h"
+=======
+#line 1 "proyectoFinal.l"
+#line 2 "proyectoFinal.l"
+#include <stdio.h>
+#include <string.h>
+#include "proyectoFinal.tab.h"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 #line 528 "lex.yy.c"
 #line 529 "lex.yy.c"
 
@@ -742,7 +750,11 @@ YY_DECL
 		}
 
 	{
+<<<<<<< HEAD
 #line 9 "proyectoTDC.l"
+=======
+#line 9 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 
 
 #line 749 "lex.yy.c"
@@ -815,183 +827,327 @@ do_action:	/* This label is used only to access EOF actions. */
 case 1:
 /* rule 1 can match eol */
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 11 "proyectoTDC.l"
+=======
+#line 11 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 ; /* Ignorar espacios, tabulaciones y saltos de linea */
 	YY_BREAK
 case 2:
 /* rule 2 can match eol */
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 13 "proyectoTDC.l"
+=======
+#line 13 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 ; /* Ignorar comentarios */
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 15 "proyectoTDC.l"
+=======
+#line 15 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return ALLOCATE; }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 16 "proyectoTDC.l"
+=======
+#line 16 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MAIN; }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 17 "proyectoTDC.l"
+=======
+#line 17 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return INICIO_BLOQUE; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 18 "proyectoTDC.l"
+=======
+#line 18 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return END; }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 20 "proyectoTDC.l"
+=======
+#line 20 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return INPUT; }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 21 "proyectoTDC.l"
+=======
+#line 21 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return OUTPUT; }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 23 "proyectoTDC.l"
+=======
+#line 23 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return IF; }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 24 "proyectoTDC.l"
+=======
+#line 24 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return THEN; }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 25 "proyectoTDC.l"
+=======
+#line 25 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return ELSE; }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 27 "proyectoTDC.l"
+=======
+#line 27 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return AND; }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 28 "proyectoTDC.l"
+=======
+#line 28 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return OR; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 30 "proyectoTDC.l"
+=======
+#line 30 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return DO; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 31 "proyectoTDC.l"
+=======
+#line 31 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return WHILE; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 32 "proyectoTDC.l"
+=======
+#line 32 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return FOR; }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 33 "proyectoTDC.l"
+=======
+#line 33 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return TO; }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 34 "proyectoTDC.l"
+=======
+#line 34 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return ASIGNACION; }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 36 "proyectoTDC.l"
+=======
+#line 36 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MAYOR_IGUAL; }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 37 "proyectoTDC.l"
+=======
+#line 37 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MENOR_IGUAL; }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 38 "proyectoTDC.l"
+=======
+#line 38 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return COMPARACION_IGUAL; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 39 "proyectoTDC.l"
+=======
+#line 39 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return DIFERENTE; }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 41 "proyectoTDC.l"
+=======
+#line 41 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return POTENCIA; }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 43 "proyectoTDC.l"
+=======
+#line 43 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return DOS_PUNTOS; }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 44 "proyectoTDC.l"
+=======
+#line 44 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return PUNTO_COMA; }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 46 "proyectoTDC.l"
+=======
+#line 46 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MAS; }
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 47 "proyectoTDC.l"
+=======
+#line 47 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MENOS; }
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 48 "proyectoTDC.l"
+=======
+#line 48 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return POR; }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 49 "proyectoTDC.l"
+=======
+#line 49 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return ENTRE; }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 51 "proyectoTDC.l"
+=======
+#line 51 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return PAR_IZQ; }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 52 "proyectoTDC.l"
+=======
+#line 52 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return PAR_DER; }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 54 "proyectoTDC.l"
+=======
+#line 54 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MENOR; }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 55 "proyectoTDC.l"
+=======
+#line 55 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { return MAYOR; }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 57 "proyectoTDC.l"
+=======
+#line 57 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { strcpy(yylval.cadena, yytext); return ID; }
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 59 "proyectoTDC.l"
+=======
+#line 59 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 { strcpy(yylval.cadena, yytext); return NUMERO; }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 61 "proyectoTDC.l"
+=======
+#line 61 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 {
                                 fprintf(stderr,
                                     "Token invalido: ('%s') en linea %d\n",
@@ -1001,7 +1157,11 @@ YY_RULE_SETUP
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
+<<<<<<< HEAD
 #line 68 "proyectoTDC.l"
+=======
+#line 68 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 ECHO;
 	YY_BREAK
 #line 1008 "lex.yy.c"
@@ -2021,6 +2181,10 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
+<<<<<<< HEAD
 #line 68 "proyectoTDC.l"
 
+=======
+#line 68 "proyectoFinal.l"
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 

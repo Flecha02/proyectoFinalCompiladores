@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 push x
 call input
 pop x
@@ -14,4 +15,12 @@ l1:
 res=0
 l2:
 push res
+=======
+push_dir b
+call input
+t1=1+2
+t2=t1+b
+a=t2
+push a
+>>>>>>> 0d13e2d360bb01cbac9ff8a5e01d73312fac9992
 call output
