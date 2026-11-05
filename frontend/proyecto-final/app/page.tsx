@@ -33,7 +33,7 @@ export default function EasyLangIDE() {
     }
   };
 
-  // 2. Función unificada para consumir la API del Backend (Node.js + Compilador en C)
+  // 2. Función unificada para consumir la API del Backend
   const handleCompileBackend = async () => {
     try {
       setConsoleOutput('Enviando código al servidor de compilación...');
@@ -68,7 +68,7 @@ export default function EasyLangIDE() {
     const resultado = await handleCompileBackend();
     if (resultado && resultado.exito) {
       setConsoleOutput(
-        '=== COMPILACIÓN Y TRADUCCIÓN EXITOSA ===\n' +
+        'COMPILACIÓN Y TRADUCCIÓN EXITOSA\n' +
         '1. Archivo codigo.tac generado en el servidor.\n' +
         '2. Archivo codigo.asm generado con éxito en el servidor.\n\n' +
         'Puedes ensamblar y correr en tu Ubuntu con:\n' +
